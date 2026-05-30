@@ -18,7 +18,9 @@ RTPENGINE_SOCKETS="$(/usr/local/bin/discover-rtpengine.sh)"
 export RTPENGINE_SOCKETS
 
 if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
-  export OPENSIPS_DB_URL="mysql://${MARIADB_USER}:${MARIADB_PASSWORD}@${MARIADB_HOST}/${MARIADB_DATABASE}"
+  db_user_enc=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$MARIADB_USER")
+  db_pass_enc=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$MARIADB_PASSWORD")
+  export OPENSIPS_DB_URL="mysql://${db_user_enc}:${db_pass_enc}@${MARIADB_HOST}/${MARIADB_DATABASE}"
 fi
 
 apply_sed() {

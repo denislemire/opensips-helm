@@ -40,7 +40,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 libxml2 libpcre3 libcurl4 libhiredis0.14 \
     libmariadb3 libjson-c5 libevent-2.1-7 libxmlrpc-core-c3 libmemcached11 \
-    libmicrohttpd12 libuuid1 dnsutils iputils-ping mariadb-client \
+    libmicrohttpd12 libuuid1 dnsutils iputils-ping mariadb-client python3-minimal \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
