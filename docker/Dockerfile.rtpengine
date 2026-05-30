@@ -32,6 +32,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=build /usr/local/bin/rtpengine /usr/local/bin/rtpengine
 
-USER nobody
 ENTRYPOINT ["/usr/local/bin/rtpengine"]
 CMD ["--foreground"]
