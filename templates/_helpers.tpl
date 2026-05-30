@@ -55,7 +55,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- $root := . -}}
 {{- $host := include "opensips.rtpengineHeadlessHost" . -}}
 {{- $name := include "opensips.rtpengineStatefulSetName" . -}}
-{{- $port := .Values.rtpengine.service.controlPort -}}
+{{- $port := int .Values.rtpengine.service.controlPort -}}
 {{- $count := int .Values.rtpengine.replicaCount -}}
 {{- $sockets := list -}}
 {{- range $i := until $count -}}
