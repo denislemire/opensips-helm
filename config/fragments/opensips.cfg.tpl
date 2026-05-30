@@ -16,6 +16,6 @@ socket=tls:0.0.0.0:{{ .Values.tls.port }}
 {{- end }}
 auto_aliases=no
 
-children=4
+udp_workers={{ .Values.opensips.udpWorkers | default 4 }}
 
 # Fragment files are concatenated below this line by entrypoint.sh (@@FRAGMENTS@@)

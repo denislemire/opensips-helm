@@ -25,6 +25,8 @@ opensips:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: false
   extraEnv: {}
+  # OpenSIPS 4.0: children= removed; use udp_workers.
+  udpWorkers: 4
 
 rtpengine:
   enabled: true

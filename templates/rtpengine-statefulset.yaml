@@ -49,7 +49,7 @@ spec:
             - --listen-ng=0.0.0.0:{{ .Values.rtpengine.service.controlPort }}
             - --port-min={{ .Values.rtpengine.service.portRange.start }}
             - --port-max={{ .Values.rtpengine.service.portRange.end }}
-            - --interface=0.0.0.0
+            - --interface={{ include "opensips.rtpengineInterfaceArg" . }}
             {{- range .Values.rtpengine.extraArgs }}
             - {{ . }}
             {{- end }}

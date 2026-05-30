@@ -85,3 +85,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "opensips.rtpengineDistributed" -}}
 {{- if and .Values.rtpengine.enabled (eq .Values.rtpengine.mode "distributed") -}}true{{- else -}}false{{- end -}}
 {{- end -}}
+
+{{- define "opensips.rtpengineInterfaceArg" -}}
+{{- if .Values.rtpengine.media.advertisedIp -}}
+internal/any!{{ .Values.rtpengine.media.advertisedIp }}
+{{- else -}}
+any
+{{- end -}}
+{{- end -}}
