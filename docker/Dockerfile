@@ -20,8 +20,9 @@ RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" --recurse-submodules \
     https://github.com/OpenSIPS/opensips.git opensips
 
 WORKDIR /src/opensips
-RUN make include_modules="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth" \
-    all && make include_modules="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth" \
+ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar ipops"
+RUN make include_modules="${OPENSIPS_MODULES}" \
+    all && make include_modules="${OPENSIPS_MODULES}" \
     install
 
 FROM debian:bookworm-slim
@@ -38,16 +39,16 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 libxml2 libpcre3 libcurl4 libhiredis0.14 \
     libmariadb3 libjson-c5 libevent-2.1-7 libxmlrpc-core-c3 libmemcached11 \
-    libmicrohttpd12 libuuid1 dnsutils iputils-ping \
+    libmicrohttpd12 libuuid1 dnsutils iputils-ping mariadb-client \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
 COPY docker/discover-rtpengine.sh /usr/local/bin/discover-rtpengine.sh
-COPY docker/register-carrier.sh /usr/local/bin/register-carrier.sh
+COPY docker/seed-db.sh /usr/local/bin/seed-db.sh
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/discover-rtpengine.sh \
-    /usr/local/bin/register-carrier.sh /usr/local/bin/entrypoint.sh
+    /usr/local/bin/seed-db.sh /usr/local/bin/entrypoint.sh
 
 EXPOSE 5060/udp 5060/tcp
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

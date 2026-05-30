@@ -1,4 +1,5 @@
-# Phase 2 — cutover ONLY when ready. Moves MetalLB VIP from Asterisk to OpenSIPS/RTPEngine.
+# Phase 2 — single-VIP cutover (OpenSIPS steals Asterisk's MetalLB IP).
+# EhWS uses split edge instead — see phase2-split-edge-dual-vip.yaml (Asterisk keeps .60).
 # Prerequisite: demote asterisk Service to ClusterIP in ehws-infra (separate PR).
 # Do NOT apply until Phase 1 is verified in-cluster.
 

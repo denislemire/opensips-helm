@@ -23,6 +23,18 @@ data:
   peers-asterisk.cfg: |
 {{ tpl (.Files.Get "config/fragments/peers-asterisk.cfg.tpl") . | indent 4 }}
   {{- end }}
+  {{- if .Values.mariadb.enabled }}
+  db.cfg: |
+{{ tpl (.Files.Get "config/fragments/db.cfg.tpl") . | indent 4 }}
+  {{- end }}
+  {{- if and .Values.mariadb.enabled .Values.registration.enabled .Values.carrier.enabled }}
+  carrier.cfg: |
+{{ tpl (.Files.Get "config/fragments/carrier.cfg.tpl") . | indent 4 }}
+  {{- end }}
+  {{- if and .Values.mariadb.enabled .Values.remoteRegistration.enabled }}
+  registrar.cfg: |
+{{ tpl (.Files.Get "config/fragments/registrar.cfg.tpl") . | indent 4 }}
+  {{- end }}
   {{- if .Values.registration.enabled }}
   registration.cfg: |
 {{ tpl (.Files.Get "config/fragments/registration.cfg.tpl") . | indent 4 }}

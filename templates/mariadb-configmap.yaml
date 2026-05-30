@@ -1,0 +1,12 @@
+{{- if .Values.mariadb.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opensips.fullname" . }}-mariadb-init
+  labels:
+    {{- include "opensips.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mariadb
+data:
+  00-opensips-schema.sql: |
+{{ .Files.Get "config/sql/00-opensips-schema.sql" | indent 4 }}
+{{- end }}

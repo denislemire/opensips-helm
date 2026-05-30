@@ -50,6 +50,26 @@ spec:
               value: {{ include "opensips.tlsEnabled" . | quote }}
             - name: PROMETHEUS_ENABLED
               value: {{ include "opensips.prometheusEnabled" . | quote }}
+            - name: MARIADB_ENABLED
+              value: {{ .Values.mariadb.enabled | quote }}
+            {{- if .Values.mariadb.enabled }}
+            - name: MARIADB_HOST
+              value: {{ include "opensips.mariadbFullname" . | quote }}
+            - name: MARIADB_DATABASE
+              value: {{ .Values.mariadb.auth.database | quote }}
+            - name: MARIADB_USER
+              value: {{ .Values.mariadb.auth.username | quote }}
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensips.mariadbSecretName" . }}
+                  key: {{ .Values.mariadb.auth.passwordKey }}
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensips.mariadbSecretName" . }}
+                  key: {{ .Values.mariadb.auth.rootPasswordKey }}
+            {{- end }}
             {{- if .Values.registration.enabled }}
             - name: REGISTRATION_REGISTRAR
               value: {{ .Values.registration.registrar | quote }}
@@ -57,6 +77,10 @@ spec:
               value: {{ .Values.registration.username | quote }}
             - name: REGISTRATION_DOMAIN
               value: {{ default .Values.registration.registrar .Values.registration.domain | quote }}
+            - name: REGISTRATION_INTERVAL
+              value: {{ .Values.registration.interval | quote }}
+            - name: REGISTRATION_BINDING_URI
+              value: {{ default (printf "sip:%s@%s:5060" .Values.registration.username .Values.sip.advertisedFqdn) .Values.registration.bindingUri | quote }}
             - name: REGISTRATION_PASSWORD
               valueFrom:
                 secretKeyRef:

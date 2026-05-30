@@ -97,3 +97,23 @@ any
 {{- define "opensips.prometheusEnabled" -}}
 {{- if .Values.prometheus.enabled -}}true{{- else -}}false{{- end -}}
 {{- end -}}
+
+{{- define "opensips.mariadbFullname" -}}
+{{- printf "%s-mariadb" (include "opensips.fullname" .) -}}
+{{- end -}}
+
+{{- define "opensips.mariadbSecretName" -}}
+{{- if .Values.mariadb.auth.existingSecret -}}
+{{- .Values.mariadb.auth.existingSecret -}}
+{{- else -}}
+{{- printf "%s-mariadb" (include "opensips.fullname" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "opensips.mariadbImage" -}}
+{{- printf "%s:%s" .Values.mariadb.image.repository .Values.mariadb.image.tag -}}
+{{- end -}}
+
+{{- define "opensips.mariadbHost" -}}
+{{- printf "%s.%s.svc.cluster.local" (include "opensips.mariadbFullname" .) .Release.Namespace -}}
+{{- end -}}

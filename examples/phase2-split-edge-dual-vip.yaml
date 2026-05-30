@@ -1,0 +1,50 @@
+# Phase 2 — split edge (dual VIP). Asterisk keeps 192.168.50.60 for LAN phones.
+# OpenSIPS SIP on 192.168.50.61 (voip-pool + Calico serviceLoadBalancerIPs).
+# RTPEngine stays ClusterIP until router forwards move to .61.
+
+opensips:
+  service:
+    type: LoadBalancer
+    loadBalancerIP: "192.168.50.61"
+
+mariadb:
+  enabled: true
+
+carrier:
+  enabled: true
+  host: ca.voip.ms
+  port: 5060
+  sourceCIDRs:
+    - 208.100.60.166/32
+
+registration:
+  enabled: true
+  registrar: ca.voip.ms
+  username: "427588"
+  domain: ca.voip.ms
+  existingSecret: voipms-opensips-reg
+  bindingUri: "sip:427588@sip.ehws.generic.business:5060"
+
+sip:
+  advertisedFqdn: sip.ehws.generic.business
+
+peers:
+  asterisk:
+    enabled: true
+    host: asterisk.asterisk.svc.cluster.local
+    sourceCIDRs:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+
+remoteRegistration:
+  enabled: true
+
+rtpengine:
+  mode: distributed
+  replicaCount: 1
+  service:
+    type: ClusterIP
+
+tls:
+  enabled: false
+  existingSecret: opensips-tls

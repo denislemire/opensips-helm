@@ -1,3 +1,1 @@
-# Carrier registration metadata — uac REGISTER runs from entrypoint when enabled.
-
-# Credentials: registration.existingSecret (never commit real values to Git).
+# Carrier registration metadata — row seeded at startup from REGISTRATION_* env.

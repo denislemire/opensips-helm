@@ -17,11 +17,19 @@ fi
 RTPENGINE_SOCKETS="$(/usr/local/bin/discover-rtpengine.sh)"
 export RTPENGINE_SOCKETS
 
+if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
+  export OPENSIPS_DB_URL="mysql://${MARIADB_USER}:${MARIADB_PASSWORD}@${MARIADB_HOST}/${MARIADB_DATABASE}"
+fi
+
 apply_sed() {
-  sed "s|@@RTPENGINE_SOCKETS@@|${RTPENGINE_SOCKETS}|g" "$1"
+  local src="$1"
+  if [[ -n "${OPENSIPS_DB_URL:-}" ]]; then
+    sed "s|@@RTPENGINE_SOCKETS@@|${RTPENGINE_SOCKETS}|g; s|@@DB_URL@@|${OPENSIPS_DB_URL}|g" "$src"
+  else
+    sed "s|@@RTPENGINE_SOCKETS@@|${RTPENGINE_SOCKETS}|g" "$src"
+  fi
 }
 
-# Global section (opensips.cfg template) then inline fragments — OpenSIPS 4.0 single-file config.
 apply_sed "${template_dir}/opensips.cfg" | sed '/^# Fragment files are concatenated/,$d' > "${run_cfg}"
 
 append_fragment() {
@@ -34,14 +42,17 @@ append_fragment() {
 append_fragment "${template_dir}/modules.cfg"
 [[ "${TLS_ENABLED:-false}" == "true" ]] && append_fragment "${template_dir}/tls.cfg"
 [[ "${PROMETHEUS_ENABLED:-false}" == "true" ]] && append_fragment "${template_dir}/prometheus.cfg"
+append_fragment "${template_dir}/db.cfg"
+append_fragment "${template_dir}/registrar.cfg"
+append_fragment "${template_dir}/carrier.cfg"
 append_fragment "${template_dir}/rtpengine.cfg"
 append_fragment "${template_dir}/routing.cfg"
 append_fragment "${template_dir}/peers-asterisk.cfg"
 append_fragment "${template_dir}/registration.cfg"
 append_fragment "${template_dir}/extra-routes.cfg"
 
-if [[ "${REGISTRATION_ENABLED:-false}" == "true" ]]; then
-  /usr/local/bin/register-carrier.sh || echo "warning: carrier registration script failed" >&2
+if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
+  /usr/local/bin/seed-db.sh
 fi
 
 exec /usr/local/sbin/opensips -f "${run_cfg}" -F
