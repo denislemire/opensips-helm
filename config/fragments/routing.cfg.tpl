@@ -47,7 +47,7 @@ route {
         }
         exit;
     }
-    if ($rU != $null && lookup("location")) {
+    if (lookup("location")) {
         if (is_method("INVITE|MESSAGE|NOTIFY|SUBSCRIBE|REFER|UPDATE|INFO")) {
             route(RELAY);
             exit;

@@ -6,5 +6,5 @@ modparam("dialog", "db_url", "@@DB_URL@@")
 modparam("dialog", "db_mode", 1)
 
 modparam("usrloc", "db_url", "@@DB_URL@@")
-modparam("usrloc", "db_mode", 2)
+modparam("usrloc", "working_mode_preset", "sql-only")
 modparam("usrloc", "use_domain", 1)
