@@ -21,7 +21,7 @@ RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" --recurse-submodules \
     https://github.com/OpenSIPS/opensips.git opensips
 
 WORKDIR /src/opensips
-ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar ipops"
+ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar permissions"
 RUN make include_modules="${OPENSIPS_MODULES}" \
     all && make include_modules="${OPENSIPS_MODULES}" \
     install

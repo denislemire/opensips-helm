@@ -11,7 +11,6 @@ loadmodule "dialog.so"
 loadmodule "rtpengine.so"
 loadmodule "uac.so"
 loadmodule "uac_auth.so"
-loadmodule "ipops.so"
 
 modparam("rr", "append_fromtag", 1)
 modparam("dialog", "dlg_match_mode", 1)

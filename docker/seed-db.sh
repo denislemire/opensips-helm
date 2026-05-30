@@ -50,11 +50,45 @@ EOF
   echo "seeded uac_registrant row for ${username}@${domain}"
 }
 
+seed_address_group() {
+  local group_id="$1"
+  local cidrs_csv="$2"
+  [[ -n "$cidrs_csv" ]] || return 0
+  mariadb -h "$db_host" -u "$db_user" -p"$db_pass" "$db_name" -e "DELETE FROM address WHERE grp = ${group_id};"
+  local IFS=','
+  for cidr in $cidrs_csv; do
+    cidr="${cidr// /}"
+    [[ -n "$cidr" ]] || continue
+    local ip="${cidr%%/*}"
+    local mask="${cidr##*/}"
+    [[ "$mask" == "$ip" ]] && mask=32
+    mariadb -h "$db_host" -u "$db_user" -p"$db_pass" "$db_name" -e \
+      "INSERT INTO address (grp, ip, mask, port, proto) VALUES (${group_id}, '${ip}', ${mask}, 0, 'any');"
+  done
+  echo "seeded address group ${group_id}"
+}
+
 if [[ "${MARIADB_ENABLED:-false}" != "true" ]]; then
   exit 0
 fi
 
 wait_for_mysql
+
+mariadb -h "$db_host" -u "$db_user" -p"$db_pass" "$db_name" <<'EOF'
+CREATE TABLE IF NOT EXISTS address (
+    id INT(10) UNSIGNED AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    grp SMALLINT(5) UNSIGNED DEFAULT 0 NOT NULL,
+    ip CHAR(50) NOT NULL,
+    mask SMALLINT UNSIGNED DEFAULT 32 NOT NULL,
+    port SMALLINT(5) UNSIGNED DEFAULT 0 NOT NULL,
+    proto CHAR(4) DEFAULT 'any' NOT NULL,
+    pattern CHAR(64) DEFAULT NULL,
+    context_info CHAR(32) DEFAULT NULL
+) ENGINE=InnoDB;
+EOF
+
+seed_address_group 1 "${PEERS_ASTERISK_CIDRS:-}"
+seed_address_group 2 "${CARRIER_SOURCE_CIDRS:-}"
 
 if [[ "${REGISTRATION_ENABLED:-false}" == "true" ]]; then
   seed_registrant

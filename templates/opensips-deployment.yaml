@@ -69,6 +69,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "opensips.mariadbSecretName" . }}
                   key: {{ .Values.mariadb.auth.rootPasswordKey }}
+            - name: PEERS_ASTERISK_CIDRS
+              value: {{ join "," .Values.peers.asterisk.sourceCIDRs | quote }}
+            - name: CARRIER_SOURCE_CIDRS
+              value: {{ join "," .Values.carrier.sourceCIDRs | quote }}
             {{- end }}
             {{- if .Values.registration.enabled }}
             - name: REGISTRATION_REGISTRAR

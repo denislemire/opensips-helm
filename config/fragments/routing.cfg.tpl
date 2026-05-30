@@ -76,11 +76,9 @@ route[FROM_PBX] {
     if (!is_method("INVITE|UPDATE|NOTIFY|REFER|INFO|MESSAGE|OPTIONS")) {
         return;
     }
-    {{- if .Values.peers.asterisk.sourceCIDRs }}
-    if (!( {{- range $i, $cidr := .Values.peers.asterisk.sourceCIDRs }}{{ if $i }} || {{ end }}is_ip_in_subnet("$si", {{ $cidr | quote }}){{- end }} )) {
+    if (!check_source_address(1)) {
         return;
     }
-    {{- end }}
     if (is_method("INVITE|UPDATE")) {
         rtpengine_manage("trust-address replace-origin replace-session-connection");
     }
@@ -109,14 +107,8 @@ route[FROM_CARRIER] {
     }
     if ($fd =~ "{{ .Values.carrier.host }}") {
         # matched by domain
-    } else {
-        {{- if .Values.carrier.sourceCIDRs }}
-        if (!( {{- range $i, $cidr := .Values.carrier.sourceCIDRs }}{{ if $i }} || {{ end }}is_ip_in_subnet("$si", {{ $cidr | quote }}){{- end }} )) {
-            return;
-        }
-        {{- else }}
+    } else if (!check_source_address(2)) {
         return;
-        {{- end }}
     }
     if (is_method("INVITE|UPDATE")) {
         rtpengine_manage("trust-address replace-origin replace-session-connection");
