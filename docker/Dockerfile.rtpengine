@@ -7,7 +7,7 @@ FROM debian:bookworm-slim AS build
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential ca-certificates git pkg-config \
+    build-essential ca-certificates git pkg-config gperf \
     libglib2.0-dev libssl-dev libevent-dev libhiredis-dev libpcre2-dev \
     libcurl4-openssl-dev libjson-glib-dev libwebsockets-dev libxmlrpc-core-c3-dev \
     libiptc-dev zlib1g-dev libxml2-dev libpcap0.8-dev \
