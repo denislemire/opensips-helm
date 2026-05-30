@@ -8,9 +8,10 @@ ARG OPENSIPS_VERSION=0.1.0
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates git build-essential bison flex \
+    ca-certificates git build-essential bison flex pkg-config \
     libssl-dev libncurses-dev libxml2-dev libpcre3-dev \
-    libcurl4-openssl-dev libhiredis-dev libmariadb-dev libjson-c-dev \
+    libcurl4-openssl-dev libhiredis-dev libmariadb-dev libmariadb-dev-compat \
+    default-libmysqlclient-dev libjson-c-dev \
     libevent-dev libxmlrpc-core-c3-dev libperl-dev libmemcached-dev \
     libmicrohttpd-dev libuuid1 uuid-dev \
     && rm -rf /var/lib/apt/lists/*
