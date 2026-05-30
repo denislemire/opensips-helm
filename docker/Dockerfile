@@ -20,7 +20,7 @@ RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" --recurse-submodules \
     https://github.com/OpenSIPS/opensips.git opensips
 
 WORKDIR /src/opensips
-RUN make include_modules="proto_udp proto_tcp sl tm rr maxfwd sipmsgops textops siputils dialog rtpengine uac uac_auth" \
+RUN make include_modules="signaling proto_udp proto_tcp sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth" \
     all && make install
 
 FROM debian:bookworm-slim
