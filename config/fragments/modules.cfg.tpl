@@ -14,7 +14,6 @@ loadmodule "uac_auth.so"
 {{- if .Values.mariadb.enabled }}
 loadmodule "db_mysql.so"
 loadmodule "usrloc.so"
-loadmodule "permissions.so"
 {{- end }}
 {{- if .Values.remoteRegistration.enabled }}
 loadmodule "registrar.so"

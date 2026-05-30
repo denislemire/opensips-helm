@@ -76,7 +76,14 @@ route[FROM_PBX] {
     if (!is_method("INVITE|UPDATE|NOTIFY|REFER|INFO|MESSAGE|OPTIONS")) {
         return;
     }
-    if (!check_source_address(1)) {
+    if ($fd =~ "{{ .Values.carrier.host }}") {
+        return;
+    }
+    if ($si =~ "^10\.") {
+        # RFC1918 cluster pod CIDR
+    } else if ($si =~ "^172\.(1[6-9]|2[0-9]|3[0-1])\.") {
+        # RFC1918 cluster pod CIDR
+    } else {
         return;
     }
     if (is_method("INVITE|UPDATE")) {
@@ -107,7 +114,9 @@ route[FROM_CARRIER] {
     }
     if ($fd =~ "{{ .Values.carrier.host }}") {
         # matched by domain
-    } else if (!check_source_address(2)) {
+    } else if ($si =~ "^208\.100\.60\.166$") {
+        # VoIP.ms Montreal POP
+    } else {
         return;
     }
     if (is_method("INVITE|UPDATE")) {

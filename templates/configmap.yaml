@@ -26,8 +26,6 @@ data:
   {{- if .Values.mariadb.enabled }}
   db.cfg: |
 {{ tpl (.Files.Get "config/fragments/db.cfg.tpl") . | indent 4 }}
-  permissions.cfg: |
-{{ tpl (.Files.Get "config/fragments/permissions.cfg.tpl") . | indent 4 }}
   {{- end }}
   {{- if and .Values.mariadb.enabled .Values.registration.enabled .Values.carrier.enabled }}
   carrier.cfg: |
