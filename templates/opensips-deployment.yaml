@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opensips.fullname" . }}
+  labels:
+    {{- include "opensips.labels" . | nindent 4 }}
+    app.kubernetes.io/component: opensips
+spec:
+  replicas: {{ .Values.opensips.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "opensips.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: opensips
+  template:
+    metadata:
+      labels:
+        {{- include "opensips.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: opensips
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.opensips.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: opensips
+          image: {{ include "opensips.image" . | quote }}
+          imagePullPolicy: {{ .Values.opensips.image.pullPolicy }}
+          env:
+            - name: RTPENGINE_MODE
+              value: {{ .Values.rtpengine.mode | quote }}
+            - name: RTPENGINE_DISCOVERY
+              value: {{ .Values.rtpengine.discovery | quote }}
+            - name: RTPENGINE_CONTROL_PORT
+              value: {{ .Values.rtpengine.service.controlPort | quote }}
+            - name: RTPENGINE_HEADLESS_HOST
+              value: {{ include "opensips.rtpengineHeadlessHost" . | quote }}
+            - name: RTPENGINE_STATEFULSET_NAME
+              value: {{ include "opensips.rtpengineStatefulSetName" . | quote }}
+            - name: RTPENGINE_REPLICA_COUNT
+              value: {{ .Values.rtpengine.replicaCount | quote }}
+            - name: RTPENGINE_STATIC_SOCKETS
+              value: {{ include "opensips.rtpengineStaticSockets" . | quote }}
+            - name: REGISTRATION_ENABLED
+              value: {{ .Values.registration.enabled | quote }}
+            {{- if .Values.registration.enabled }}
+            - name: REGISTRATION_REGISTRAR
+              value: {{ .Values.registration.registrar | quote }}
+            - name: REGISTRATION_USERNAME
+              value: {{ .Values.registration.username | quote }}
+            - name: REGISTRATION_DOMAIN
+              value: {{ default .Values.registration.registrar .Values.registration.domain | quote }}
+            - name: REGISTRATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-registration" (include "opensips.fullname" .)) .Values.registration.existingSecret }}
+                  key: {{ .Values.registration.passwordKey }}
+            {{- end }}
+            {{- range $k, $v := .Values.opensips.extraEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          ports:
+            - name: sip-udp
+              containerPort: {{ .Values.opensips.service.sipPorts.udp }}
+              protocol: UDP
+            - name: sip-tcp
+              containerPort: {{ .Values.opensips.service.sipPorts.tcp }}
+              protocol: TCP
+          {{- with .Values.opensips.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config-template
+              mountPath: /etc/opensips/template
+          readinessProbe:
+            tcpSocket:
+              port: sip-tcp
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: sip-tcp
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.opensips.resources | nindent 12 }}
+        {{- if eq (include "opensips.rtpengineSidecar" .) "true" }}
+        - name: rtpengine
+          image: {{ include "opensips.rtpengineImage" . | quote }}
+          imagePullPolicy: {{ .Values.rtpengine.image.pullPolicy }}
+          args:
+            - rtpengine
+            - --foreground
+            - --listen-ng=127.0.0.1:{{ .Values.rtpengine.service.controlPort }}
+            - --port-min={{ .Values.rtpengine.service.portRange.start }}
+            - --port-max={{ .Values.rtpengine.service.portRange.end }}
+            {{- range .Values.rtpengine.extraArgs }}
+            - {{ . }}
+            {{- end }}
+          {{- with .Values.rtpengine.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.rtpengine.resources | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: config-template
+          configMap:
+            name: {{ include "opensips.configMapName" . }}

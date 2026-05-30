@@ -1,0 +1,128 @@
+# Default values for the opensips chart.
+# Site-specific settings (LoadBalancer IP, FQDN, carrier credentials) belong in your HelmRelease — not here.
+
+nameOverride: ""
+fullnameOverride: ""
+
+opensips:
+  image:
+    repository: denislemire/opensips
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  service:
+    # Phase 1: ClusterIP — does not take an existing Asterisk MetalLB VIP.
+    # Phase 2 cutover: LoadBalancer + loadBalancerIP in consumer values.
+    type: ClusterIP
+    loadBalancerIP: ""
+    annotations: {}
+    sipPorts:
+      udp: 5060
+      tcp: 5060
+  resources: {}
+  podSecurityContext: {}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+  extraEnv: {}
+
+rtpengine:
+  enabled: true
+  # distributed (default) | sidecar (debug — scale down for troubleshooting)
+  mode: distributed
+  replicaCount: 4
+  discovery: dns
+  discoveryReload: onStart
+  image:
+    repository: sipwise/rtpengine
+    tag: "mr11.5.1.4"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    loadBalancerIP: ""
+    annotations: {}
+    portRange:
+      start: 10000
+      end: 10048
+    controlPort: 2223
+  media:
+    advertisedIp: ""
+  resources: {}
+  securityContext:
+    capabilities:
+      add:
+        - NET_ADMIN
+  extraArgs: []
+  # One RTPEngine pod per node (requires at least replicaCount schedulable nodes).
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  - rtpengine
+          topologyKey: kubernetes.io/hostname
+  topologySpreadConstraints: []
+  nodeSelector: {}
+  tolerations: []
+
+sip:
+  advertisedFqdn: ""
+
+# TLS / SIPS (5061) — mount cert-manager Let's Encrypt secret or existingSecret.
+tls:
+  enabled: false
+  port: 5061
+  certificatePath: /etc/opensips/tls/tls.crt
+  privateKeyPath: /etc/opensips/tls/tls.key
+  # Use a Secret created by cert-manager (tls.crt / tls.key) or your own PKI.
+  existingSecret: ""
+  certManager:
+    enabled: false
+    secretName: ""
+    issuerRef:
+      kind: ClusterIssuer
+      name: letsencrypt-prod
+    dnsNames: []
+    # Optional; defaults to first dnsNames entry when set.
+    commonName: ""
+
+peers:
+  asterisk:
+    enabled: false
+    host: ""
+    port: 5060
+
+registration:
+  enabled: false
+  registrar: ""
+  username: ""
+  domain: ""
+  existingSecret: ""
+  passwordKey: password
+  authUsernameKey: username
+  interval: 300
+
+mariadb:
+  enabled: false
+  auth:
+    rootPassword: changeme
+    username: opensips
+    password: changeme
+    database: opensips
+
+opensipsCfg:
+  existingConfigMap: ""
+  extraRoutes: ""
+
+networkPolicy:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}
+
+imagePullSecrets: []

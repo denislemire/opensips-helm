@@ -1,0 +1,18 @@
+1. OpenSIPS was installed in {{ .Release.Namespace }} namespace.
+
+2. Service type: {{ .Values.opensips.service.type }}
+   {{- if eq .Values.opensips.service.type "ClusterIP" }}
+   Phase 1 bootstrap — no external LoadBalancer; existing Asterisk VIP is untouched.
+   {{- else if .Values.opensips.service.loadBalancerIP }}
+   External SIP: {{ .Values.opensips.service.loadBalancerIP }}:{{ .Values.opensips.service.sipPorts.udp }}
+   {{- end }}
+
+3. RTPEngine mode: {{ .Values.rtpengine.mode }} (replicas: {{ .Values.rtpengine.replicaCount }})
+
+4. Test in-cluster:
+   kubectl run -it --rm sip-test --image=nicolaka/netshoot --restart=Never -n {{ .Release.Namespace }} -- \
+     nc -vz {{ include "opensips.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local {{ .Values.opensips.service.sipPorts.tcp }}
+
+5. Debug with sidecar: helm upgrade --set rtpengine.mode=sidecar --set rtpengine.replicaCount=1
+
+6. Phase 2 cutover: see examples/phase2-cutover-loadbalancer.yaml — only when ready to move MetalLB VIP.

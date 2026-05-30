@@ -1,0 +1,42 @@
+---
+description: Author identity, commit hygiene, and modular config standards for opensips-helm
+alwaysApply: true
+---
+
+# opensips-helm project standards
+
+## Author
+
+Git commits and chart metadata use:
+
+**Denis Lemire \<denis@lemire.name\>**
+
+Set commit author when committing:
+
+```bash
+git commit --author="Denis Lemire <denis@lemire.name>" ...
+```
+
+## Quality bar
+
+This is a **public** Helm chart and Docker image. Treat every change as something Denis will show another VoIP engineer.
+
+- **License:** GPL-2.0-or-later (matches OpenSIPS). Docker image compiles GPL OpenSIPS — combined work stays GPL.
+- **Generic chart** — no site-specific hostnames, IPs, or carrier credentials in chart defaults. Site config belongs in consumer `HelmRelease` values only.
+- **Modular OpenSIPS config** — keep routing in small, named fragments under `config/fragments/`; assemble via Helm or documented `import` paths. One concern per file.
+- **Clean history** — focused commits with complete sentences; one logical change per commit when possible.
+- **Documented values** — every non-obvious `values.yaml` key has a comment; README explains modes (`sidecar` vs `distributed`) and discovery.
+- **No secrets in Git** — credentials via `existingSecret` only; never commit real registrar passwords or API keys.
+
+## Helm conventions
+
+- Chart name: `opensips`; labels use `app.kubernetes.io/component` (`opensips` | `rtpengine`).
+- Template helpers live in `templates/_helpers.tpl`; RTP port ranges generated from `values`, not hand-edited YAML lists.
+- Run `helm lint .` and `helm template` against `examples/` before proposing chart changes.
+- **CI:** CircleCI path-filter build is **planned** (Docker Hub + Zot); not configured yet. Use `scripts/kaniko-build-job.yaml` or local Docker until then.
+
+## OpenSIPS config conventions
+
+- OpenSIPS **4.0** syntax (`socket=` not `listen=`; see migration guide).
+- Prefer `route[NAME]` blocks over monolithic scripts.
+- RTPEngine socket list: sidecar uses `127.0.0.1:2223`; distributed uses DNS discovery in entrypoint or Helm `static` mode.

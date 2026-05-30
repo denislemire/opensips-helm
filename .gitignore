@@ -1,0 +1,14 @@
+# Helm
+charts/*.tgz
+*.lock
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Build artifacts
+dist/
+release-version.txt

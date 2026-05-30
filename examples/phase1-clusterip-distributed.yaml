@@ -1,0 +1,42 @@
+# Phase 1 — bootstrap OpenSIPS + 4× RTPEngine without touching Asterisk MetalLB VIP.
+# Install into a dedicated namespace; all Services stay ClusterIP.
+
+opensips:
+  image:
+    repository: registry.ehws.generic.business/ehws/opensips
+    tag: "0.1.0"
+  service:
+    type: ClusterIP
+
+rtpengine:
+  enabled: true
+  mode: distributed
+  replicaCount: 4
+  discovery: dns
+  image:
+    repository: registry.ehws.generic.business/ehws/rtpengine
+    tag: "mr11.5.1.4"
+  service:
+    type: ClusterIP
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  - rtpengine
+          topologyKey: kubernetes.io/hostname
+
+peers:
+  asterisk:
+    enabled: true
+    host: asterisk.asterisk.svc.cluster.local
+    port: 5060
+
+registration:
+  enabled: false
+
+sip:
+  advertisedFqdn: sip.ehws.generic.business

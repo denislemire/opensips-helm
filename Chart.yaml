@@ -1,0 +1,22 @@
+apiVersion: v2
+name: opensips
+description: OpenSIPS SIP proxy with RTPEngine (sidecar or distributed) for Kubernetes
+type: application
+version: 0.1.0
+appVersion: "4.0-rc1"
+kubeVersion: ">=1.24.0-0"
+home: https://github.com/denislemire/opensips-helm
+sources:
+  - https://github.com/OpenSIPS/opensips
+  - https://github.com/sipwise/rtpengine
+maintainers:
+  - name: Denis Lemire
+    email: denis@lemire.name
+keywords:
+  - opensips
+  - sip
+  - voip
+  - rtpengine
+  - telephony
+annotations:
+  org.opencontainers.image.licenses: GPL-2.0-or-later

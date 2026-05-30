@@ -1,0 +1,34 @@
+{{- if not .Values.opensipsCfg.existingConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opensips.fullname" . }}
+  labels:
+    {{- include "opensips.labels" . | nindent 4 }}
+    app.kubernetes.io/component: opensips
+data:
+  opensips.cfg: |
+{{ tpl (.Files.Get "config/fragments/opensips.cfg.tpl") . | indent 4 }}
+  modules.cfg: |
+{{ tpl (.Files.Get "config/fragments/modules.cfg.tpl") . | indent 4 }}
+  rtpengine.cfg: |
+{{ tpl (.Files.Get "config/fragments/rtpengine.cfg.tpl") . | indent 4 }}
+  routing.cfg: |
+{{ tpl (.Files.Get "config/fragments/routing.cfg.tpl") . | indent 4 }}
+  {{- if .Values.tls.enabled }}
+  tls.cfg: |
+{{ tpl (.Files.Get "config/fragments/tls.cfg.tpl") . | indent 4 }}
+  {{- end }}
+  {{- if .Values.peers.asterisk.enabled }}
+  peers-asterisk.cfg: |
+{{ tpl (.Files.Get "config/fragments/peers-asterisk.cfg.tpl") . | indent 4 }}
+  {{- end }}
+  {{- if .Values.registration.enabled }}
+  registration.cfg: |
+{{ tpl (.Files.Get "config/fragments/registration.cfg.tpl") . | indent 4 }}
+  {{- end }}
+  {{- if .Values.opensipsCfg.extraRoutes }}
+  extra-routes.cfg: |
+{{ .Values.opensipsCfg.extraRoutes | indent 4 }}
+  {{- end }}
+{{- end }}

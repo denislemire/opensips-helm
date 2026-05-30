@@ -1,0 +1,30 @@
+# Phase 2 — cutover ONLY when ready. Moves MetalLB VIP from Asterisk to OpenSIPS/RTPEngine.
+# Prerequisite: demote asterisk Service to ClusterIP in ehws-infra (separate PR).
+# Do NOT apply until Phase 1 is verified in-cluster.
+
+opensips:
+  service:
+    type: LoadBalancer
+    loadBalancerIP: "192.168.50.60"
+
+rtpengine:
+  mode: distributed
+  replicaCount: 4
+  service:
+    type: LoadBalancer
+    loadBalancerIP: "192.168.50.60"
+  media:
+    advertisedIp: "192.168.50.60"
+
+registration:
+  enabled: true
+  registrar: montreal6.voip.ms
+  existingSecret: voipms-opensips-reg
+
+sip:
+  advertisedFqdn: sip.ehws.generic.business
+
+peers:
+  asterisk:
+    enabled: true
+    host: asterisk.asterisk.svc.cluster.local

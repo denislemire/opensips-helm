@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensips.fullname" . }}
+  labels:
+    {{- include "opensips.labels" . | nindent 4 }}
+    app.kubernetes.io/component: opensips
+  {{- with .Values.opensips.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.opensips.service.type }}
+  {{- if and (eq .Values.opensips.service.type "LoadBalancer") .Values.opensips.service.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.opensips.service.loadBalancerIP | quote }}
+  {{- end }}
+  selector:
+    {{- include "opensips.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: opensips
+  ports:
+    - name: sip-udp
+      port: {{ .Values.opensips.service.sipPorts.udp }}
+      targetPort: sip-udp
+      protocol: UDP
+    - name: sip-tcp
+      port: {{ .Values.opensips.service.sipPorts.tcp }}
+      targetPort: sip-tcp
+      protocol: TCP

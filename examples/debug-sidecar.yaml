@@ -1,0 +1,9 @@
+# Phase 1 debug — single pod, RTPEngine sidecar, minimal moving parts.
+
+rtpengine:
+  mode: sidecar
+  replicaCount: 1
+
+opensips:
+  service:
+    type: ClusterIP
