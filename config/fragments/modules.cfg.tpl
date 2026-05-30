@@ -11,6 +11,17 @@ loadmodule "dialog.so"
 loadmodule "rtpengine.so"
 loadmodule "uac.so"
 loadmodule "uac_auth.so"
+{{- if .Values.mariadb.enabled }}
+loadmodule "db_mysql.so"
+loadmodule "usrloc.so"
+loadmodule "permissions.so"
+{{- end }}
+{{- if .Values.remoteRegistration.enabled }}
+loadmodule "registrar.so"
+{{- end }}
+{{- if and .Values.mariadb.enabled .Values.registration.enabled .Values.carrier.enabled }}
+loadmodule "uac_registrant.so"
+{{- end }}
 
 modparam("rr", "append_fromtag", 1)
 modparam("dialog", "dlg_match_mode", 1)
