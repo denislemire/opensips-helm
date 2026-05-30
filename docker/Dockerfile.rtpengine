@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1
+# Build sipwise/rtpengine from source (Docker Hub pull blocked on EhWS).
+# Kaniko context: cloned rtpengine repo at mr11.5.1.4 (see build-rtpengine-image-job.yaml).
+
+FROM debian:bookworm-slim AS build
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential ca-certificates git pkg-config \
+    libglib2.0-dev libssl-dev libevent-dev libhiredis-dev libpcre2-dev \
+    libcurl4-openssl-dev libjson-glib-dev libwebsockets-dev libxmlrpc-core-c3-dev \
+    libiptc-dev zlib1g-dev libxml2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+WORKDIR /src/daemon
+RUN make -j"$(nproc)" with_iptables_option=no with_transcoding=no rtpengine \
+    && strip -o /usr/local/bin/rtpengine rtpengine
+
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libglib2.0-0 libssl3 libevent-2.1-7 libhiredis0.14 \
+    libpcre2-8-0 libcurl4 libjson-glib-1.0-0 libwebsockets17 libxmlrpc-core-c3 \
+    libip4tc2 libip6tc2 iptables \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /usr/local/bin/rtpengine /usr/local/bin/rtpengine
+
+USER nobody
+ENTRYPOINT ["/usr/local/bin/rtpengine"]
+CMD ["--foreground"]
