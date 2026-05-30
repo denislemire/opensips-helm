@@ -18,18 +18,18 @@ auto_aliases=no
 
 children=4
 
-import "opensips.d/modules.cfg"
+import_file "/etc/opensips/run/opensips.d/modules.cfg"
 {{- if .Values.tls.enabled }}
-import "opensips.d/tls.cfg"
+import_file "/etc/opensips/run/opensips.d/tls.cfg"
 {{- end }}
-import "opensips.d/rtpengine.cfg"
-import "opensips.d/routing.cfg"
+import_file "/etc/opensips/run/opensips.d/rtpengine.cfg"
+import_file "/etc/opensips/run/opensips.d/routing.cfg"
 {{- if .Values.peers.asterisk.enabled }}
-import "opensips.d/peers-asterisk.cfg"
+import_file "/etc/opensips/run/opensips.d/peers-asterisk.cfg"
 {{- end }}
 {{- if .Values.registration.enabled }}
-import "opensips.d/registration.cfg"
+import_file "/etc/opensips/run/opensips.d/registration.cfg"
 {{- end }}
 {{- if .Values.opensipsCfg.extraRoutes }}
-import "opensips.d/extra-routes.cfg"
+import_file "/etc/opensips/run/opensips.d/extra-routes.cfg"
 {{- end }}
