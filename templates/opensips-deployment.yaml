@@ -48,6 +48,8 @@ spec:
               value: {{ .Values.registration.enabled | quote }}
             - name: TLS_ENABLED
               value: {{ include "opensips.tlsEnabled" . | quote }}
+            - name: PROMETHEUS_ENABLED
+              value: {{ include "opensips.prometheusEnabled" . | quote }}
             {{- if .Values.registration.enabled }}
             - name: REGISTRATION_REGISTRAR
               value: {{ .Values.registration.registrar | quote }}
@@ -75,6 +77,11 @@ spec:
             {{- if .Values.tls.enabled }}
             - name: sip-tls
               containerPort: {{ .Values.tls.port }}
+              protocol: TCP
+            {{- end }}
+            {{- if .Values.prometheus.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.prometheus.port }}
               protocol: TCP
             {{- end }}
           {{- with .Values.opensips.containerSecurityContext }}

@@ -127,4 +127,10 @@ serviceMonitor:
   interval: 30s
   labels: {}
 
+prometheus:
+  enabled: false
+  port: 8888
+  # Space-separated stats or groups (trailing colon exports whole group). "all" exports everything.
+  statistics: "all"
+
 imagePullSecrets: []

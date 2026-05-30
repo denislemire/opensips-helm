@@ -93,3 +93,7 @@ internal/any!{{ .Values.rtpengine.media.advertisedIp }}
 any
 {{- end -}}
 {{- end -}}
+
+{{- define "opensips.prometheusEnabled" -}}
+{{- if .Values.prometheus.enabled -}}true{{- else -}}false{{- end -}}
+{{- end -}}

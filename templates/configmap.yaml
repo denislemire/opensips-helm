@@ -27,6 +27,10 @@ data:
   registration.cfg: |
 {{ tpl (.Files.Get "config/fragments/registration.cfg.tpl") . | indent 4 }}
   {{- end }}
+  {{- if .Values.prometheus.enabled }}
+  prometheus.cfg: |
+{{ tpl (.Files.Get "config/fragments/prometheus.cfg.tpl") . | indent 4 }}
+  {{- end }}
   {{- if .Values.opensipsCfg.extraRoutes }}
   extra-routes.cfg: |
 {{ .Values.opensipsCfg.extraRoutes | indent 4 }}

@@ -33,6 +33,7 @@ append_fragment() {
 
 append_fragment "${template_dir}/modules.cfg"
 [[ "${TLS_ENABLED:-false}" == "true" ]] && append_fragment "${template_dir}/tls.cfg"
+[[ "${PROMETHEUS_ENABLED:-false}" == "true" ]] && append_fragment "${template_dir}/prometheus.cfg"
 append_fragment "${template_dir}/rtpengine.cfg"
 append_fragment "${template_dir}/routing.cfg"
 append_fragment "${template_dir}/peers-asterisk.cfg"

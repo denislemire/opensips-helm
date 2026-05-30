@@ -32,3 +32,9 @@ spec:
       targetPort: sip-tls
       protocol: TCP
     {{- end }}
+    {{- if .Values.prometheus.enabled }}
+    - name: metrics
+      port: {{ .Values.prometheus.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
