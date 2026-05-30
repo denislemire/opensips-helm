@@ -24,7 +24,9 @@ fi
 apply_sed() {
   local src="$1"
   if [[ -n "${OPENSIPS_DB_URL:-}" ]]; then
-    sed "s|@@RTPENGINE_SOCKETS@@|${RTPENGINE_SOCKETS}|g; s|@@DB_URL@@|${OPENSIPS_DB_URL}|g" "$src"
+    local escaped_url
+    escaped_url=$(printf '%s' "$OPENSIPS_DB_URL" | sed 's/[\\&|]/\\&/g')
+    sed "s|@@RTPENGINE_SOCKETS@@|${RTPENGINE_SOCKETS}|g; s|@@DB_URL@@|${escaped_url}|g" "$src"
   else
     sed "s|@@RTPENGINE_SOCKETS@@|${RTPENGINE_SOCKETS}|g" "$src"
   fi
