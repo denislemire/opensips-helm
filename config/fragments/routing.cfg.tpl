@@ -6,6 +6,11 @@ route {
         exit;
     }
 
+    if (is_method("OPTIONS")) {
+        sl_send_reply(200, "OK");
+        exit;
+    }
+
     if (has_totag()) {
         if (is_method("ACK")) {
             if (t_check_trans()) {
@@ -33,7 +38,7 @@ route {
         exit;
     }
 
-    if (is_method("INVITE|OPTIONS|INFO|MESSAGE|NOTIFY|SUBSCRIBE|REFER")) {
+    if (is_method("INVITE|INFO|MESSAGE|NOTIFY|SUBSCRIBE|REFER")) {
         route(TO_PBX);
         exit;
     }

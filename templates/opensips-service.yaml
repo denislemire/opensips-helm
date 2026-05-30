@@ -26,3 +26,9 @@ spec:
       port: {{ .Values.opensips.service.sipPorts.tcp }}
       targetPort: sip-tcp
       protocol: TCP
+    {{- if .Values.tls.enabled }}
+    - name: sip-tls
+      port: {{ .Values.tls.port }}
+      targetPort: sip-tls
+      protocol: TCP
+    {{- end }}
