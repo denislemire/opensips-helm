@@ -30,4 +30,4 @@ if [[ "${REGISTRATION_ENABLED:-false}" == "true" ]]; then
   /usr/local/bin/register-carrier.sh || echo "warning: carrier registration script failed" >&2
 fi
 
-exec /usr/sbin/opensips -f "${run_dir}/opensips.cfg" -F
+exec /usr/local/sbin/opensips -f "${run_dir}/opensips.cfg" -F

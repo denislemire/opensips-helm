@@ -25,9 +25,9 @@ FROM debian:bookworm-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libglib2.0-0 libssl3 libevent-2.1-7 libhiredis0.14 \
-    libpcre2-8-0 libcurl4 libjson-glib-1.0-0 libwebsockets17 libxmlrpc-core-c3 \
-    libip4tc2 libip6tc2 libpcap0.8 iptables \
+    ca-certificates libglib2.0-0 libssl3 libevent-2.1-7 libevent-pthreads-2.1-7 \
+    libhiredis0.14 libpcre2-8-0 libcurl4 libjson-glib-1.0-0 libwebsockets17 \
+    libxmlrpc-core-c3 libip4tc2 libip6tc2 libpcap0.8 iptables \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /usr/local/bin/rtpengine /usr/local/bin/rtpengine
