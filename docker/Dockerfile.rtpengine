@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential ca-certificates git pkg-config \
     libglib2.0-dev libssl-dev libevent-dev libhiredis-dev libpcre2-dev \
     libcurl4-openssl-dev libjson-glib-dev libwebsockets-dev libxmlrpc-core-c3-dev \
-    libiptc-dev zlib1g-dev libxml2-dev \
+    libiptc-dev zlib1g-dev libxml2-dev libpcap0.8-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -27,7 +27,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libglib2.0-0 libssl3 libevent-2.1-7 libhiredis0.14 \
     libpcre2-8-0 libcurl4 libjson-glib-1.0-0 libwebsockets17 libxmlrpc-core-c3 \
-    libip4tc2 libip6tc2 iptables \
+    libip4tc2 libip6tc2 libpcap0.8 iptables \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /usr/local/bin/rtpengine /usr/local/bin/rtpengine
