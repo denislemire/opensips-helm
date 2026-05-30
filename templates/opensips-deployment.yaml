@@ -94,7 +94,6 @@ spec:
           image: {{ include "opensips.rtpengineImage" . | quote }}
           imagePullPolicy: {{ .Values.rtpengine.image.pullPolicy }}
           args:
-            - rtpengine
             - --foreground
             - --listen-ng=127.0.0.1:{{ .Values.rtpengine.service.controlPort }}
             - --port-min={{ .Values.rtpengine.service.portRange.start }}

@@ -9,10 +9,10 @@ syslog_enabled=no
 advertised_address={{ .Values.sip.advertisedFqdn | quote }}
 {{- end }}
 
-socket=udp:0.0.0.0:{{ .Values.opensips.service.sipPorts.udp }} use_revers_dns no
-socket=tcp:0.0.0.0:{{ .Values.opensips.service.sipPorts.tcp }} use_revers_dns no
+socket=udp:0.0.0.0:{{ .Values.opensips.service.sipPorts.udp }} use_reverse_dns no
+socket=tcp:0.0.0.0:{{ .Values.opensips.service.sipPorts.tcp }} use_reverse_dns no
 {{- if .Values.tls.enabled }}
-socket=tls:0.0.0.0:{{ .Values.tls.port }} use_revers_dns no
+socket=tls:0.0.0.0:{{ .Values.tls.port }} use_reverse_dns no
 {{- end }}
 
 children=4
