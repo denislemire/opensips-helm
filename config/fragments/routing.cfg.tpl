@@ -11,7 +11,20 @@ route {
         exit;
     }
 
+    if (is_method("CANCEL")) {
+        if (t_check_trans()) {
+            rtpengine_delete();
+            t_relay();
+        }
+        exit;
+    }
+
     if (has_totag()) {
+        if (is_method("BYE|CANCEL")) {
+            rtpengine_delete();
+        } else if (is_method("INVITE|UPDATE|ACK") && has_body("application/sdp")) {
+            rtpengine_manage("trust-address replace-origin replace-session-connection");
+        }
         if (is_method("ACK")) {
             if (t_check_trans()) {
                 t_relay();
@@ -20,14 +33,6 @@ route {
         }
         route(RELAY);
         exit;
-    }
-
-    if (is_method("INVITE|UPDATE")) {
-        rtpengine_manage("trust-address replace-origin replace-session-connection");
-    }
-
-    if (is_method("BYE|CANCEL")) {
-        rtpengine_manage();
     }
 
     record_route();
@@ -55,14 +60,8 @@ route {
     }
     {{- end }}
 
-    {{- if .Values.peers.asterisk.enabled }}
-    if (is_method("INVITE|INFO|MESSAGE|NOTIFY|SUBSCRIBE|REFER|UPDATE")) {
-        route(TO_PBX);
-        exit;
-    }
-    {{- end }}
-
-    route(RELAY);
+    sl_send_reply(403, "Forbidden");
+    exit;
 }
 
 route[RELAY] {
@@ -79,29 +78,51 @@ route[FROM_PBX] {
     if ($fd =~ "{{ .Values.carrier.host }}") {
         return;
     }
-    if ($si =~ "^10\.") {
-        # RFC1918 cluster pod CIDR
-    } else if ($si =~ "^172\.(1[6-9]|2[0-9]|3[0-1])\.") {
-        # RFC1918 cluster pod CIDR
-    } else {
+    {{- if .Values.peers.asterisk.sourceCIDRs }}
+    if (!( {{- range $i, $cidr := .Values.peers.asterisk.sourceCIDRs }}{{ if $i }} || {{ end }}is_ip_in_subnet("$si", {{ $cidr | quote }}){{- end }} )) {
         return;
     }
+    {{- else }}
+    return;
+    {{- end }}
     if (is_method("INVITE|UPDATE")) {
-        rtpengine_manage("trust-address replace-origin replace-session-connection");
+        rtpengine_manage("trust-address replace-origin replace-session-connection direction=internal direction=external");
+        t_on_reply("FROM_CARRIER_REPLY");
     }
     {{- if .Values.carrier.enabled }}
     if (is_method("INVITE|UPDATE|NOTIFY|REFER|INFO|MESSAGE")) {
-        $du = "sip:" + $rU + "@{{ .Values.carrier.host }}:{{ .Values.carrier.port }}";
+        uac_replace_from("", "sip:{{ .Values.registration.username }}@{{ default .Values.registration.registrar .Values.registration.domain }}");
+        $ru = "sip:" + $rU + "@{{ .Values.carrier.host }}:{{ .Values.carrier.port }}";
+        $du = $ru;
+        if (is_method("INVITE|UPDATE")) {
+            t_on_failure("CARRIER_AUTH");
+        }
     }
     {{- end }}
     route(RELAY);
     exit;
 }
 
-route[TO_PBX] {
-    if (is_method("INVITE|UPDATE")) {
-        rtpengine_manage("trust-address replace-origin replace-session-connection");
+{{- if and .Values.peers.asterisk.enabled .Values.carrier.enabled }}
+failure_route[CARRIER_AUTH] {
+    if (t_was_cancelled()) {
+        exit;
     }
+    if (t_check_status("401|407")) {
+        if (uac_auth()) {
+            t_relay();
+        }
+    }
+}
+{{- end }}
+
+onreply_route[FROM_CARRIER_REPLY] {
+    if (has_body("application/sdp")) {
+        rtpengine_manage("trust-address replace-origin replace-session-connection direction=external direction=internal");
+    }
+}
+
+route[TO_PBX] {
     $du = "sip:{{ .Values.peers.asterisk.host }}:{{ .Values.peers.asterisk.port }}";
     route(RELAY);
 }
@@ -112,15 +133,16 @@ route[FROM_CARRIER] {
     if (!is_method("INVITE|UPDATE|NOTIFY|REFER|INFO|MESSAGE|OPTIONS")) {
         return;
     }
-    if ($fd =~ "{{ .Values.carrier.host }}") {
-        # matched by domain
-    } else if ($si =~ "^208\.100\.60\.166$") {
-        # VoIP.ms Montreal POP
-    } else {
+    {{- if .Values.carrier.sourceCIDRs }}
+    if (!( {{- range $i, $cidr := .Values.carrier.sourceCIDRs }}{{ if $i }} || {{ end }}is_ip_in_subnet("$si", {{ $cidr | quote }}){{- end }} )) {
         return;
     }
+    {{- else }}
+    return;
+    {{- end }}
     if (is_method("INVITE|UPDATE")) {
-        rtpengine_manage("trust-address replace-origin replace-session-connection");
+        rtpengine_manage("trust-address replace-origin replace-session-connection direction=external direction=internal");
+        t_on_reply("FROM_PBX_REPLY");
     }
     {{- if .Values.peers.asterisk.enabled }}
     route(TO_PBX);
@@ -128,5 +150,11 @@ route[FROM_CARRIER] {
     route(RELAY);
     {{- end }}
     exit;
+}
+
+onreply_route[FROM_PBX_REPLY] {
+    if (has_body("application/sdp")) {
+        rtpengine_manage("trust-address replace-origin replace-session-connection direction=internal direction=external");
+    }
 }
 {{- end }}

@@ -6,6 +6,10 @@ stderror_enabled=yes
 syslog_enabled=no
 mpath="/usr/local/lib64/opensips/modules/"
 
+{{- with .Values.sip.productName }}
+server_header={{ printf "Server: %s" . | quote }}
+user_agent_header={{ printf "User-Agent: %s" . | quote }}
+{{- end }}
 {{- if .Values.sip.advertisedFqdn }}
 advertised_address={{ .Values.sip.advertisedFqdn | quote }}
 {{- end }}

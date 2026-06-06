@@ -30,6 +30,8 @@ data:
   {{- if and .Values.mariadb.enabled .Values.registration.enabled .Values.carrier.enabled }}
   carrier.cfg: |
 {{ tpl (.Files.Get "config/fragments/carrier.cfg.tpl") . | indent 4 }}
+  carrier-auth.cfg: |
+{{ tpl (.Files.Get "config/fragments/carrier-auth.cfg.tpl") . | indent 4 }}
   {{- end }}
   {{- if and .Values.mariadb.enabled .Values.remoteRegistration.enabled }}
   registrar.cfg: |

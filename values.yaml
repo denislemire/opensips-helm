@@ -72,6 +72,8 @@ rtpengine:
 
 sip:
   advertisedFqdn: ""
+  # Product token used in locally generated Server and User-Agent headers.
+  productName: ""
 
 # TLS / SIPS (5061) — mount cert-manager Let's Encrypt secret or existingSecret.
 tls:
@@ -100,6 +102,7 @@ peers:
     sourceCIDRs:
       - 10.0.0.0/8
       - 172.16.0.0/12
+      - 192.168.0.0/16
 
 carrier:
   enabled: false

@@ -1,11 +1,13 @@
 # Phase 2 — split edge (dual VIP). Asterisk keeps 192.168.50.60 for LAN phones.
 # OpenSIPS SIP on 192.168.50.61 (voip-pool + Calico serviceLoadBalancerIPs).
-# RTPEngine stays ClusterIP until router forwards move to .61.
+# OpenSIPS and RTPEngine share .61 using disjoint SIP and RTP ports.
 
 opensips:
   service:
     type: LoadBalancer
     loadBalancerIP: "192.168.50.61"
+    annotations:
+      metallb.io/allow-shared-ip: opensips-edge
 
 mariadb:
   enabled: true
@@ -37,13 +39,19 @@ peers:
       - 172.16.0.0/12
 
 remoteRegistration:
-  enabled: true
+  # Keep disabled until REGISTER authentication is explicitly configured.
+  enabled: false
 
 rtpengine:
   mode: distributed
   replicaCount: 1
+  media:
+    advertisedIp: "203.0.113.10"
   service:
-    type: ClusterIP
+    type: LoadBalancer
+    loadBalancerIP: "192.168.50.61"
+    annotations:
+      metallb.io/allow-shared-ip: opensips-edge
 
 tls:
   enabled: false

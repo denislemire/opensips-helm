@@ -86,14 +86,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if and .Values.rtpengine.enabled (eq .Values.rtpengine.mode "distributed") -}}true{{- else -}}false{{- end -}}
 {{- end -}}
 
-{{- define "opensips.rtpengineInterfaceArg" -}}
-{{- if .Values.rtpengine.media.advertisedIp -}}
-internal/any!{{ .Values.rtpengine.media.advertisedIp }}
-{{- else -}}
-any
-{{- end -}}
-{{- end -}}
-
 {{- define "opensips.prometheusEnabled" -}}
 {{- if .Values.prometheus.enabled -}}true{{- else -}}false{{- end -}}
 {{- end -}}

@@ -49,6 +49,7 @@ append_fragment "${template_dir}/modules.cfg"
 append_fragment "${template_dir}/db.cfg"
 append_fragment "${template_dir}/registrar.cfg"
 append_fragment "${template_dir}/carrier.cfg"
+append_fragment "${template_dir}/carrier-auth.cfg"
 append_fragment "${template_dir}/rtpengine.cfg"
 append_fragment "${template_dir}/routing.cfg"
 append_fragment "${template_dir}/peers-asterisk.cfg"
@@ -57,6 +58,15 @@ append_fragment "${template_dir}/extra-routes.cfg"
 
 if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
   /usr/local/bin/seed-db.sh
+fi
+
+if [[ "${REGISTRATION_ENABLED:-false}" == "true" && -n "${REGISTRATION_USERNAME:-}" && -n "${REGISTRATION_PASSWORD:-}" ]]; then
+  reg_domain="${REGISTRATION_DOMAIN:-${REGISTRATION_REGISTRAR}}"
+  uac_cred="${REGISTRATION_USERNAME}:${reg_domain}:${REGISTRATION_PASSWORD}"
+  escaped_uac_cred=$(printf '%s' "$uac_cred" | sed 's/[\\&|"]/\\&/g')
+  sed -i "s|@@UAC_AUTH_CREDENTIAL@@|modparam(\"uac_auth\", \"credential\", \"${escaped_uac_cred}\")|" "${run_cfg}"
+else
+  sed -i '/@@UAC_AUTH_CREDENTIAL@@/d' "${run_cfg}"
 fi
 
 exec /usr/local/sbin/opensips -f "${run_cfg}" -F
