@@ -72,6 +72,8 @@ rtpengine:
 
 sip:
   advertisedFqdn: ""
+  # Additional host[:port] identities that OpenSIPS should recognize as itself.
+  aliases: []
   # Product token used in locally generated Server and User-Agent headers.
   productName: ""
 

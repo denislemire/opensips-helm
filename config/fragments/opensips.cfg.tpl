@@ -13,6 +13,9 @@ user_agent_header={{ printf "User-Agent: %s" . | quote }}
 {{- if .Values.sip.advertisedFqdn }}
 advertised_address={{ .Values.sip.advertisedFqdn | quote }}
 {{- end }}
+{{- range .Values.sip.aliases }}
+alias={{ . | quote }}
+{{- end }}
 
 socket=udp:0.0.0.0:{{ .Values.opensips.service.sipPorts.udp }}
 socket=tcp:0.0.0.0:{{ .Values.opensips.service.sipPorts.tcp }}
