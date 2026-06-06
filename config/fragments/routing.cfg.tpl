@@ -20,18 +20,20 @@ route {
     }
 
     if (has_totag()) {
-        if (is_method("BYE|CANCEL")) {
-            rtpengine_delete();
-        } else if (is_method("INVITE|UPDATE|ACK") && has_body("application/sdp")) {
-            rtpengine_manage("trust-address replace-origin replace-session-connection");
-        }
-        if (is_method("ACK")) {
-            if (t_check_trans()) {
-                t_relay();
+        if (loose_route()) {
+            if (is_method("BYE")) {
+                rtpengine_delete();
+            } else if (is_method("INVITE|UPDATE|ACK") && has_body("application/sdp")) {
+                rtpengine_manage("trust-address replace-origin replace-session-connection");
             }
+            route(RELAY);
             exit;
         }
-        route(RELAY);
+
+        # A non-2xx ACK follows the INVITE server transaction.
+        if (is_method("ACK") && t_check_trans()) {
+            t_relay();
+        }
         exit;
     }
 
