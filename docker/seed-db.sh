@@ -6,12 +6,11 @@ db_host="${MARIADB_HOST:-}"
 db_name="${MARIADB_DATABASE:-opensips}"
 db_user="${MARIADB_USER:-opensips}"
 db_pass="${MARIADB_PASSWORD:-}"
-root_pass="${MARIADB_ROOT_PASSWORD:-${db_pass}}"
 
 wait_for_mysql() {
   local attempt=0
   while [[ $attempt -lt 60 ]]; do
-    if mariadb-admin ping -h "$db_host" -u root -p"$root_pass" --silent 2>/dev/null; then
+    if mariadb -h "$db_host" -u "$db_user" -p"$db_pass" "$db_name" -e "SELECT 1" >/dev/null 2>&1; then
       return 0
     fi
     attempt=$((attempt + 1))
@@ -39,7 +38,7 @@ seed_registrant() {
   local password_sql="${password//\'/\\\'}"
   local binding_sql="${binding//\'/\\\'}"
 
-  mariadb -h "$db_host" -u root -p"$root_pass" "$db_name" <<EOF
+  mariadb -h "$db_host" -u "$db_user" -p"$db_pass" "$db_name" <<EOF
 DELETE FROM registrant WHERE aor = '${aor}';
 INSERT INTO registrant (
   registrar, proxy, aor, username, password, binding_URI, expiry, state
@@ -54,7 +53,7 @@ seed_address_group() {
   local group_id="$1"
   local cidrs_csv="$2"
   [[ -n "$cidrs_csv" ]] || return 0
-  mariadb -h "$db_host" -u root -p"$root_pass" "$db_name" -e "DELETE FROM address WHERE grp = ${group_id};"
+  mariadb -h "$db_host" -u "$db_user" -p"$db_pass" "$db_name" -e "DELETE FROM address WHERE grp = ${group_id};"
   local IFS=','
   for cidr in $cidrs_csv; do
     cidr="${cidr// /}"
@@ -62,7 +61,7 @@ seed_address_group() {
     local ip="${cidr%%/*}"
     local mask="${cidr##*/}"
     [[ "$mask" == "$ip" ]] && mask=32
-    mariadb -h "$db_host" -u root -p"$root_pass" "$db_name" -e \
+    mariadb -h "$db_host" -u "$db_user" -p"$db_pass" "$db_name" -e \
       "INSERT INTO address (grp, ip, mask, port, proto) VALUES (${group_id}, '${ip}', ${mask}, 0, 'any');"
   done
   echo "seeded address group ${group_id}"
@@ -74,7 +73,7 @@ fi
 
 wait_for_mysql
 
-mariadb -h "$db_host" -u root -p"$root_pass" "$db_name" <<'EOF'
+mariadb -h "$db_host" -u "$db_user" -p"$db_pass" "$db_name" <<'EOF'
 CREATE TABLE IF NOT EXISTS address (
     id INT(10) UNSIGNED AUTO_INCREMENT PRIMARY KEY NOT NULL,
     grp SMALLINT(5) UNSIGNED DEFAULT 0 NOT NULL,
