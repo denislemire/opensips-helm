@@ -11,9 +11,6 @@ loadmodule "dialog.so"
 loadmodule "rtpengine.so"
 loadmodule "uac.so"
 loadmodule "uac_auth.so"
-{{- if or .Values.peers.asterisk.enabled .Values.carrier.enabled }}
-loadmodule "ipops.so"
-{{- end }}
 {{- if .Values.mariadb.enabled }}
 loadmodule "db_mysql.so"
 loadmodule "usrloc.so"

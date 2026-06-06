@@ -78,13 +78,9 @@ route[FROM_PBX] {
     if ($fd =~ "{{ .Values.carrier.host }}") {
         return;
     }
-    {{- if .Values.peers.asterisk.sourceCIDRs }}
-    if (!( {{- range $i, $cidr := .Values.peers.asterisk.sourceCIDRs }}{{ if $i }} || {{ end }}is_ip_in_subnet("$si", {{ $cidr | quote }}){{- end }} )) {
+    if (!($si =~ "^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)")) {
         return;
     }
-    {{- else }}
-    return;
-    {{- end }}
     if (is_method("INVITE|UPDATE")) {
         rtpengine_manage("trust-address replace-origin replace-session-connection direction=internal direction=external");
         t_on_reply("FROM_CARRIER_REPLY");
@@ -133,13 +129,9 @@ route[FROM_CARRIER] {
     if (!is_method("INVITE|UPDATE|NOTIFY|REFER|INFO|MESSAGE|OPTIONS")) {
         return;
     }
-    {{- if .Values.carrier.sourceCIDRs }}
-    if (!( {{- range $i, $cidr := .Values.carrier.sourceCIDRs }}{{ if $i }} || {{ end }}is_ip_in_subnet("$si", {{ $cidr | quote }}){{- end }} )) {
+    if ($si != "{{ trimSuffix "/32" (first .Values.carrier.sourceCIDRs) }}") {
         return;
     }
-    {{- else }}
-    return;
-    {{- end }}
     if (is_method("INVITE|UPDATE")) {
         rtpengine_manage("trust-address replace-origin replace-session-connection direction=external direction=internal");
         t_on_reply("FROM_PBX_REPLY");
