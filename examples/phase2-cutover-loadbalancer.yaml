@@ -1,31 +1,30 @@
-# Phase 2 — single-VIP cutover (OpenSIPS steals Asterisk's MetalLB IP).
-# EhWS uses split edge instead — see phase2-split-edge-dual-vip.yaml (Asterisk keeps .60).
-# Prerequisite: demote asterisk Service to ClusterIP in ehws-infra (separate PR).
+# Phase 2 - single-VIP cutover.
+# Prerequisite: move the PBX behind a ClusterIP or headless Service.
 # Do NOT apply until Phase 1 is verified in-cluster.
 
 opensips:
   service:
     type: LoadBalancer
-    loadBalancerIP: "192.168.50.60"
+    loadBalancerIP: "192.0.2.60"
 
 rtpengine:
   mode: distributed
   replicaCount: 4
   service:
     type: LoadBalancer
-    loadBalancerIP: "192.168.50.60"
+    loadBalancerIP: "192.0.2.60"
   media:
-    advertisedIp: "192.168.50.60"
+    advertisedIp: "198.51.100.10"
 
 registration:
   enabled: true
-  registrar: montreal6.voip.ms
-  existingSecret: voipms-opensips-reg
+  registrar: sip.provider.example
+  existingSecret: carrier-registration
 
 sip:
-  advertisedFqdn: sip.ehws.generic.business
+  advertisedFqdn: sip.example.com
 
 peers:
   asterisk:
     enabled: true
-    host: asterisk.asterisk.svc.cluster.local
+    host: pbx.telephony.svc.cluster.local

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build sipwise/rtpengine from source (Docker Hub pull blocked on EhWS).
+# Build sipwise/rtpengine from source.
 # Kaniko context: cloned rtpengine repo at mr11.5.1.4 (see build-rtpengine-image-job.yaml).
 
 FROM debian:bookworm-slim AS build

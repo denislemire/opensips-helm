@@ -1,10 +1,10 @@
-# Phase 1 — bootstrap OpenSIPS + 4× RTPEngine without touching Asterisk MetalLB VIP.
+# Phase 1 - bootstrap OpenSIPS and RTPEngine using ClusterIP Services.
 # Install into a dedicated namespace; all Services stay ClusterIP.
 
 opensips:
   image:
-    repository: registry.ehws.generic.business/ehws/opensips
-    tag: "0.1.0"
+    repository: registry.example.com/telephony/opensips
+    tag: "latest"
   service:
     type: ClusterIP
 
@@ -14,7 +14,7 @@ rtpengine:
   replicaCount: 4
   discovery: dns
   image:
-    repository: registry.ehws.generic.business/ehws/rtpengine
+    repository: registry.example.com/telephony/rtpengine
     tag: "mr11.5.1.4"
   service:
     type: ClusterIP
@@ -32,11 +32,11 @@ rtpengine:
 peers:
   asterisk:
     enabled: true
-    host: asterisk.asterisk.svc.cluster.local
+    host: pbx.telephony.svc.cluster.local
     port: 5060
 
 registration:
   enabled: false
 
 sip:
-  advertisedFqdn: sip.ehws.generic.business
+  advertisedFqdn: sip.example.com

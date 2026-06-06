@@ -1,4 +1,4 @@
-# Core SIP routing — Asterisk (LAN PBX) <-> OpenSIPS <-> carrier (VoIP.ms)
+# Core SIP routing: PBX <-> OpenSIPS <-> carrier.
 
 route {
     if (!mf_process_maxfwd_header(10)) {

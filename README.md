@@ -19,7 +19,7 @@ Generic by design — no site-specific IPs, carriers, or cluster names in chart 
 
 | Phase | Service type | VIP | Carrier registration | Asterisk |
 |-------|--------------|-----|----------------------|----------|
-| **1 — Bootstrap** | ClusterIP | None | Off (avoid double VoIP.ms reg) | Unchanged LB |
+| **1 — Bootstrap** | ClusterIP | None | Off (avoid duplicate carrier registration) | Unchanged LB |
 | **2 — Cutover** | LoadBalancer + `loadBalancerIP` | e.g. `.60` | On (OpenSIPS only) | ClusterIP |
 
 ```bash

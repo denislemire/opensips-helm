@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# opensips-helm — wait for MariaDB and seed VoIP.ms uac_registrant row.
+# opensips-helm - wait for MariaDB and seed the carrier uac_registrant row.
 set -euo pipefail
 
 db_host="${MARIADB_HOST:-}"

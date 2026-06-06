@@ -1,11 +1,10 @@
-# Phase 2 — split edge (dual VIP). Asterisk keeps 192.168.50.60 for LAN phones.
-# OpenSIPS SIP on 192.168.50.61 (voip-pool + Calico serviceLoadBalancerIPs).
-# OpenSIPS and RTPEngine share .61 using disjoint SIP and RTP ports.
+# Phase 2 - split edge with separate PBX and OpenSIPS addresses.
+# OpenSIPS and RTPEngine may share an address because SIP and RTP use disjoint ports.
 
 opensips:
   service:
     type: LoadBalancer
-    loadBalancerIP: "192.168.50.61"
+    loadBalancerIP: "192.0.2.61"
     annotations:
       metallb.io/allow-shared-ip: opensips-edge
 
@@ -14,26 +13,26 @@ mariadb:
 
 carrier:
   enabled: true
-  host: ca.voip.ms
+  host: sip.provider.example
   port: 5060
   sourceCIDRs:
-    - 208.100.60.166/32
+    - 198.51.100.20/32
 
 registration:
   enabled: true
-  registrar: ca.voip.ms
-  username: "427588"
-  domain: ca.voip.ms
-  existingSecret: voipms-opensips-reg
-  bindingUri: "sip:427588@sip.ehws.generic.business:5060"
+  registrar: sip.provider.example
+  username: "account-id"
+  domain: sip.provider.example
+  existingSecret: carrier-registration
+  bindingUri: "sip:account-id@sip.example.com:5060"
 
 sip:
-  advertisedFqdn: sip.ehws.generic.business
+  advertisedFqdn: sip.example.com
 
 peers:
   asterisk:
     enabled: true
-    host: asterisk.asterisk.svc.cluster.local
+    host: pbx.telephony.svc.cluster.local
     sourceCIDRs:
       - 10.0.0.0/8
       - 172.16.0.0/12
@@ -49,7 +48,7 @@ rtpengine:
     advertisedIp: "203.0.113.10"
   service:
     type: LoadBalancer
-    loadBalancerIP: "192.168.50.61"
+    loadBalancerIP: "192.0.2.61"
     annotations:
       metallb.io/allow-shared-ip: opensips-edge
 

@@ -1,14 +1,14 @@
 # One-shot Kaniko build — push OpenSIPS image from cluster (no local Docker required).
 #
 # Prerequisites:
-#   - Namespace opensips + registry-push-auth secret (OnePasswordItem or copy from circleci)
+#   - Namespace opensips
+#   - registry-push-auth Secret containing a Docker config.json
 #
 # Usage:
 #   kubectl apply -f scripts/kaniko-build-job.yaml
 #   kubectl -n opensips wait job/build-opensips-image --for=condition=complete --timeout=45m
 #   kubectl -n opensips logs job/build-opensips-image -c kaniko
 #
-# EhWS cluster: prefer clusters/ehws/opensips/build-opensips-image-job.yaml (registry-push-auth wired).
 ---
 apiVersion: batch/v1
 kind: Job
@@ -31,38 +31,20 @@ spec:
             - --depth
             - "1"
             - --branch
-            - "v0.1.0"
+            - "v0.1.19"
             - https://github.com/denislemire/opensips-helm.git
             - /workspace
           volumeMounts:
             - name: workspace
               mountPath: /workspace
-        - name: docker-config
-          image: alpine:3.19
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -e
-              PASS=$(cat /zot-auth/password)
-              AUTH=$(printf 'admin:%s' "$PASS" | base64 | tr -d '\n')
-              mkdir -p /kaniko/.docker
-              printf '{"auths":{"zot.registry.svc.cluster.local:5000":{"auth":"%s"},"registry.ehws.generic.business":{"auth":"%s"}}}' \
-                "$AUTH" "$AUTH" > /kaniko/.docker/config.json
-          volumeMounts:
-            - name: zot-auth
-              mountPath: /zot-auth
-              readOnly: true
-            - name: docker-config
-              mountPath: /kaniko/.docker
       containers:
         - name: kaniko
           image: gcr.io/kaniko-project/executor:v1.23.2
           args:
             - --dockerfile=/workspace/docker/Dockerfile
             - --context=/workspace
-            - --destination=registry.ehws.generic.business/ehws/opensips:0.1.0
-            - --build-arg=OPENSIPS_VERSION=0.1.0
+            - --destination=registry.example.com/telephony/opensips:0.1.19
+            - --build-arg=OPENSIPS_VERSION=0.1.19
             - --cache=true
           volumeMounts:
             - name: workspace
@@ -84,7 +66,8 @@ spec:
         - name: workspace
           emptyDir: {}
         - name: docker-config
-          emptyDir: {}
-        - name: zot-auth
           secret:
             secretName: registry-push-auth
+            items:
+              - key: .dockerconfigjson
+                path: config.json

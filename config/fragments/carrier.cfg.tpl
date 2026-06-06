@@ -1,4 +1,4 @@
-# VoIP.ms / carrier peer — registration via uac_registrant when enabled.
+# Carrier registration via uac_registrant when enabled.
 
 modparam("uac_registrant", "hash_size", 1)
 modparam("uac_registrant", "timer_interval", 60)

@@ -98,32 +98,28 @@ peers:
     enabled: false
     host: ""
     port: 5060
-    # Pod CIDRs that may originate Asterisk -> OpenSIPS trunk traffic.
-    sourceCIDRs:
-      - 10.0.0.0/8
-      - 172.16.0.0/12
-      - 192.168.0.0/16
+    # Networks that may originate PBX -> OpenSIPS trunk traffic.
+    sourceCIDRs: []
 
 carrier:
   enabled: false
-  host: ca.voip.ms
+  host: ""
   port: 5060
-  sourceCIDRs:
-    - 208.100.60.166/32
+  sourceCIDRs: []
 
 remoteRegistration:
   enabled: false
 
 registration:
   enabled: false
-  registrar: ca.voip.ms
+  registrar: ""
   username: ""
   domain: ""
   existingSecret: ""
   passwordKey: password
   authUsernameKey: username
   interval: 300
-  # Contact URI OpenSIPS presents to VoIP.ms (sip:USER@FQDN:5060).
+  # Contact URI OpenSIPS presents to the carrier (sip:USER@FQDN:5060).
   bindingUri: ""
 
 mariadb:
