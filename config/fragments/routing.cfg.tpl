@@ -90,7 +90,8 @@ route[FROM_PBX] {
     {{- if .Values.carrier.enabled }}
     if (is_method("INVITE|UPDATE|NOTIFY|REFER|INFO|MESSAGE")) {
         uac_replace_from("", "sip:{{ .Values.registration.username }}@{{ default .Values.registration.registrar .Values.registration.domain }}");
-        uac_replace_to("", "sip:$rU@{{ .Values.carrier.host }}");
+        remove_hf("To");
+        append_hf("To: <sip:$rU@{{ .Values.carrier.host }}>\r\n");
         $ru = "sip:" + $rU + "@{{ .Values.carrier.host }}:{{ .Values.carrier.port }}";
         $du = $ru;
         if (is_method("INVITE|UPDATE")) {
