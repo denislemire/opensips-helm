@@ -89,6 +89,7 @@ route[FROM_PBX] {
     }
     {{- if .Values.carrier.enabled }}
     if (is_method("INVITE|UPDATE|NOTIFY|REFER|INFO|MESSAGE")) {
+        $avp(caller_id) = $fU;
         uac_replace_from("", "sip:{{ .Values.registration.username }}@{{ default .Values.registration.registrar .Values.registration.domain }}");
         remove_hf("To");
         append_hf("To: <sip:$rU@{{ .Values.carrier.host }}>\r\n");
@@ -110,6 +111,7 @@ failure_route[CARRIER_AUTH] {
     }
     if (t_check_status("401|407")) {
         if (uac_auth()) {
+            append_hf("Remote-Party-ID: <sip:$avp(caller_id)@{{ .Values.carrier.host }}>;party=calling;privacy=off;screen=no\r\n");
             t_relay();
         }
     }
