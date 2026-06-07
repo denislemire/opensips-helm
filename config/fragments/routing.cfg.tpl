@@ -84,7 +84,7 @@ route[FROM_PBX] {
         return;
     }
     if (is_method("INVITE|UPDATE")) {
-        rtpengine_manage("trust-address replace-origin replace-session-connection direction=internal direction=external");
+        rtpengine_manage("trust-address replace-origin replace-session-connection in-iface=internal out-iface=external");
         t_on_reply("FROM_CARRIER_REPLY");
     }
     {{- if .Values.carrier.enabled }}
@@ -116,7 +116,7 @@ failure_route[CARRIER_AUTH] {
 
 onreply_route[FROM_CARRIER_REPLY] {
     if (has_body("application/sdp")) {
-        rtpengine_manage("trust-address replace-origin replace-session-connection direction=external direction=internal");
+        rtpengine_manage("trust-address replace-origin replace-session-connection in-iface=external out-iface=internal");
     }
 }
 
@@ -135,7 +135,7 @@ route[FROM_CARRIER] {
         return;
     }
     if (is_method("INVITE|UPDATE")) {
-        rtpengine_manage("trust-address replace-origin replace-session-connection direction=external direction=internal");
+        rtpengine_manage("trust-address replace-origin replace-session-connection in-iface=external out-iface=internal");
         t_on_reply("FROM_PBX_REPLY");
     }
     {{- if .Values.peers.asterisk.enabled }}
@@ -148,7 +148,7 @@ route[FROM_CARRIER] {
 
 onreply_route[FROM_PBX_REPLY] {
     if (has_body("application/sdp")) {
-        rtpengine_manage("trust-address replace-origin replace-session-connection direction=internal direction=external");
+        rtpengine_manage("trust-address replace-origin replace-session-connection in-iface=internal out-iface=external");
     }
 }
 {{- end }}
