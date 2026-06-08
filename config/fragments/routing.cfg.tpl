@@ -80,6 +80,11 @@ route[FROM_PBX] {
     if (!($si =~ "^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)")) {
         return;
     }
+    # The PBX may use this proxy as a preloaded loose route. It has already
+    # reached that hop, so do not expose the private proxy Route upstream.
+    if (is_present_hf("Route")) {
+        remove_hf("Route");
+    }
     if (is_method("INVITE|UPDATE")) {
         rtpengine_manage("trust-address replace-origin replace-session-connection in-iface=internal out-iface=external");
         t_on_reply("FROM_CARRIER_REPLY");
