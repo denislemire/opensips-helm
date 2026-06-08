@@ -109,6 +109,8 @@ carrier:
   port: 5060
   callerId: ""
   sourceCIDRs: []
+  # Optional upstream request-header compaction for constrained network MTUs.
+  stripRequestHeaders: []
 
 remoteRegistration:
   enabled: false

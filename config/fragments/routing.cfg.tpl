@@ -85,6 +85,9 @@ route[FROM_PBX] {
     if (is_present_hf("Route")) {
         remove_hf("Route");
     }
+    {{- range .Values.carrier.stripRequestHeaders }}
+    remove_hf("{{ . }}");
+    {{- end }}
     if (is_method("INVITE|UPDATE")) {
         rtpengine_manage("trust-address replace-origin replace-session-connection in-iface=internal out-iface=external");
         t_on_reply("FROM_CARRIER_REPLY");
