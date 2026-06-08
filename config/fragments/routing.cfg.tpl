@@ -21,6 +21,18 @@ route {
 
     if (has_totag()) {
         if (loose_route()) {
+            {{- if and .Values.peers.asterisk.enabled .Values.carrier.enabled }}
+            # A single Record-Route hop leaves the remote Contact as the R-URI.
+            # Pin each dialog direction to its trusted next hop.
+            if (check_source_address(2)) {
+                $du = "sip:{{ .Values.peers.asterisk.host }}:{{ .Values.peers.asterisk.port }}";
+            } else if (check_source_address(1)) {
+                $du = "sip:{{ .Values.carrier.host }}:{{ .Values.carrier.port }}";
+            } else {
+                sl_send_reply(403, "Forbidden");
+                exit;
+            }
+            {{- end }}
             if (is_method("BYE")) {
                 rtpengine_delete();
             } else if (is_method("INVITE|UPDATE|ACK") && has_body("application/sdp")) {
@@ -77,7 +89,7 @@ route[FROM_PBX] {
     if (!is_method("INVITE|UPDATE|NOTIFY|REFER|INFO|MESSAGE|OPTIONS")) {
         return;
     }
-    if (!($si =~ "^(10\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|192\\.168\\.)")) {
+    if (!check_source_address(1)) {
         return;
     }
     # The PBX may use this proxy as a preloaded loose route. It has already
@@ -118,7 +130,7 @@ route[FROM_CARRIER] {
     if (!is_method("INVITE|UPDATE|NOTIFY|REFER|INFO|MESSAGE|OPTIONS")) {
         return;
     }
-    if ($si != "{{ trimSuffix "/32" (first .Values.carrier.sourceCIDRs) }}") {
+    if (!check_source_address(2)) {
         return;
     }
     if (is_method("INVITE|UPDATE")) {
