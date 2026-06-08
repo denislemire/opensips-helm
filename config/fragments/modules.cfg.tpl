@@ -16,6 +16,7 @@ loadmodule "db_mysql.so"
 loadmodule "usrloc.so"
 {{- if or .Values.peers.asterisk.enabled .Values.carrier.enabled }}
 loadmodule "permissions.so"
+modparam("permissions", "partition", "default: db_url=@@DB_URL@@; table_name=address")
 {{- end }}
 {{- end }}
 {{- if .Values.remoteRegistration.enabled }}
