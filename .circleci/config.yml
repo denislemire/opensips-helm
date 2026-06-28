@@ -191,9 +191,10 @@ jobs:
           no_output_timeout: 75m
           command: |
             IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.parameters.ehws_build >>"
+            cp -a /workspace /tmp/build-context
             /kaniko/executor \
-              --dockerfile=/workspace/docker/Dockerfile \
-              --context=dir:///workspace \
+              --dockerfile=/tmp/build-context/docker/Dockerfile \
+              --context=dir:///tmp/build-context \
               --destination="registry.ehws.generic.business/ehws/opensips:${IMAGE_TAG}" \
               --no-push \
               --tar-path=/workspace/opensips-image.tar \
