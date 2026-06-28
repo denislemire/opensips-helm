@@ -185,14 +185,14 @@ jobs:
               --context="git://github.com/denislemire/opensips-helm.git#refs/heads/${CIRCLE_BRANCH}#${CIRCLE_SHA1}" \
               --destination="registry.ehws.generic.business/ehws/opensips:${IMAGE_TAG}" \
               --no-push \
-              --tar-path=/workspace/opensips-image.tar \
+              --tar-path=/tmp/opensips-image.tar \
               --build-arg="OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>" \
               --build-arg="EHWS_BUILD=<< pipeline.parameters.ehws_build >>" \
               --build-arg="OPENSIPS_VERSION=${IMAGE_TAG}" \
               --cache=false \
               --log-format=text
       - persist_to_workspace:
-          root: /workspace
+          root: /tmp
           paths:
             - opensips-image.tar
 
@@ -201,16 +201,23 @@ jobs:
     steps:
       - attach_workspace:
           at: /workspace
+      - install_kubectl
       - install_crane
-      - oidc_zot_token
+      - oidc_kubeconfig
       - run:
-          name: Push image via Crane with OIDC bearer token
+          name: Push image via Crane with OIDC-fetched credentials
           command: |
             set -euo pipefail
             IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.parameters.ehws_build >>"
             DEST="zot.registry.svc.cluster.local:5000/ehws/opensips:${IMAGE_TAG}"
+            ZOT_PASS="$(
+              kubectl get secret registry-push-auth -n opensips \
+                -o jsonpath='{.data.password}' | base64 --decode
+            )"
+            printf '%s' "${ZOT_PASS}" \
+              | /tmp/crane auth login zot.registry.svc.cluster.local:5000 \
+                  --username admin --password-stdin --insecure
             /tmp/crane push /workspace/opensips-image.tar "${DEST}" \
-              --registry-token="$(cat /tmp/zot-bearer-token)" \
               --insecure
             echo "Pushed: ${DEST}"
 
