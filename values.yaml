@@ -136,6 +136,8 @@ mariadb:
     enabled: true
     size: 2Gi
     storageClass: ""
+    # Reuse a pre-existing claim instead of creating a StatefulSet-owned claim.
+    existingClaim: ""
   auth:
     existingSecret: ""
     rootPasswordKey: mariadb-root-password
@@ -170,3 +172,8 @@ prometheus:
   statistics: "all"
 
 imagePullSecrets: []
+
+# Render a one-shot Job that runs `opensips -C -f` against this chart's config.
+# Intended for CI; it never contacts or seeds MariaDB.
+validation:
+  enabled: false

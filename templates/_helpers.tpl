@@ -6,7 +6,12 @@
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
-{{- printf "%s-%s" .Release.Name (include "opensips.name" .) | trunc 63 | trimSuffix "-" -}}
+{{- $name := include "opensips.name" . -}}
+{{- if contains $name .Release.Name -}}
+{{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -44,11 +49,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- define "opensips.rtpengineHeadlessHost" -}}
-{{- printf "%s-rtpengine-headless.%s.svc.cluster.local" (include "opensips.fullname" .) .Release.Namespace -}}
+{{- printf "rtpengine-headless.%s.svc.cluster.local" .Release.Namespace -}}
 {{- end -}}
 
 {{- define "opensips.rtpengineStatefulSetName" -}}
-{{- printf "%s-rtpengine" (include "opensips.fullname" .) -}}
+{{- "rtpengine" -}}
 {{- end -}}
 
 {{- define "opensips.rtpengineStaticSockets" -}}
@@ -91,14 +96,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- define "opensips.mariadbFullname" -}}
-{{- printf "%s-mariadb" (include "opensips.fullname" .) -}}
+{{- "mariadb" -}}
 {{- end -}}
 
 {{- define "opensips.mariadbSecretName" -}}
 {{- if .Values.mariadb.auth.existingSecret -}}
 {{- .Values.mariadb.auth.existingSecret -}}
 {{- else -}}
-{{- printf "%s-mariadb" (include "opensips.fullname" .) -}}
+{{- "mariadb" -}}
 {{- end -}}
 {{- end -}}
 

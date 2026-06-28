@@ -59,10 +59,6 @@ append_fragment "${template_dir}/peers-asterisk.cfg"
 append_fragment "${template_dir}/registration.cfg"
 append_fragment "${template_dir}/extra-routes.cfg"
 
-if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
-  /usr/local/bin/seed-db.sh
-fi
-
 if [[ "${REGISTRATION_ENABLED:-false}" == "true" && -n "${REGISTRATION_USERNAME:-}" && -n "${REGISTRATION_PASSWORD:-}" ]]; then
   reg_domain="${REGISTRATION_DOMAIN:-${REGISTRATION_REGISTRAR}}"
   uac_cred="${REGISTRATION_USERNAME}:${reg_domain}:${REGISTRATION_PASSWORD}"
@@ -75,6 +71,10 @@ fi
 # OPENSIPS_CHECK_ONLY=true: validate config and exit — used by CI
 if [[ "${OPENSIPS_CHECK_ONLY:-false}" == "true" ]]; then
   exec /usr/sbin/opensips -C -f "${run_cfg}"
+fi
+
+if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
+  /usr/local/bin/seed-db.sh
 fi
 
 exec /usr/sbin/opensips -f "${run_cfg}" -F

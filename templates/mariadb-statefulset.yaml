@@ -69,12 +69,16 @@ spec:
       volumes:
         - name: initdb
           configMap:
-            name: {{ include "opensips.fullname" . }}-mariadb-init
-        {{- if not .Values.mariadb.persistence.enabled }}
+            name: mariadb-init
+        {{- if .Values.mariadb.persistence.existingClaim }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.mariadb.persistence.existingClaim }}
+        {{- else if not .Values.mariadb.persistence.enabled }}
         - name: data
           emptyDir: {}
         {{- end }}
-  {{- if .Values.mariadb.persistence.enabled }}
+  {{- if and .Values.mariadb.persistence.enabled (not .Values.mariadb.persistence.existingClaim) }}
   volumeClaimTemplates:
     - metadata:
         name: data

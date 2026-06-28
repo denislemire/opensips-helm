@@ -42,9 +42,6 @@ parameters:
   opensips_version:
     type: string
     default: "4.0.0"
-  ehws_build:
-    type: string
-    default: "1"
   run_build:
     type: boolean
     default: true
@@ -129,7 +126,7 @@ jobs:
           no_output_timeout: 75m
           command: |
             set -euo pipefail
-            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.parameters.ehws_build >>"
+            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.${CIRCLE_PIPELINE_NUMBER}"
             JOB="opensips-image-${CIRCLE_BUILD_NUM}"
             export IMAGE_TAG JOB
 
@@ -170,7 +167,7 @@ jobs:
                         - --context=git://github.com/denislemire/opensips-helm.git#refs/heads/${CIRCLE_BRANCH}#${CIRCLE_SHA1}
                         - --destination=zot.registry.svc.cluster.local:5000/ehws/opensips:${IMAGE_TAG}
                         - --build-arg=OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>
-                        - --build-arg=EHWS_BUILD=<< pipeline.parameters.ehws_build >>
+                        - --build-arg=EHWS_BUILD=${CIRCLE_PIPELINE_NUMBER}
                         - --build-arg=OPENSIPS_VERSION=${IMAGE_TAG}
                         - --cache=false
                         - --insecure
@@ -219,6 +216,36 @@ jobs:
             echo "Timed out waiting for ${JOB}" >&2
             exit 1
 
+  validate-image:
+    executor: default
+    steps:
+      - checkout
+      - install_kubectl
+      - install_helm
+      - oidc_kubeconfig
+      - run:
+          name: Validate rendered config with the built image
+          command: |
+            set -euo pipefail
+            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.${CIRCLE_PIPELINE_NUMBER}"
+            RELEASE="opensips-validation-${CIRCLE_PIPELINE_NUMBER}"
+            JOB="${RELEASE}-config-check"
+            VALUES=/tmp/opensips-values.json
+
+            kubectl -n opensips get helmrelease opensips -o jsonpath='{.spec.values}' > "${VALUES}"
+            helm template "${RELEASE}" . --namespace opensips -f "${VALUES}" \
+              --set-string opensips.image.tag="${IMAGE_TAG}" \
+              --set-string mariadb.auth.existingSecret=opensips-opensips-mariadb \
+              --set validation.enabled=true \
+              --show-only templates/configmap.yaml \
+              --show-only templates/config-validation-job.yaml \
+              | kubectl -n opensips apply -f -
+
+            trap 'kubectl -n opensips delete job "${JOB}" configmap "${RELEASE}" --ignore-not-found --wait=false' EXIT
+            kubectl -n opensips wait pod -l "job-name=${JOB}" --for=condition=Ready --timeout=5m
+            kubectl -n opensips logs -f "job/${JOB}"
+            kubectl -n opensips wait "job/${JOB}" --for=condition=Complete --timeout=5m
+
   publish-chart:
     executor: default
     steps:
@@ -253,6 +280,10 @@ workflows:
       - build-image:
           context: ehws-authentik-oidc
       - publish-chart:
+          context: ehws-authentik-oidc
+          requires:
+            - validate-image
+      - validate-image:
           context: ehws-authentik-oidc
           requires:
             - build-image
