@@ -8,6 +8,7 @@ ARG OPENSIPS_VERSION=0.1.0
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN rm -rf /etc/apt/sources.list.d/* \
+    && rm -f /var/lib/dpkg/statoverride /var/lib/dpkg/statoverride-old \
     && printf '%s\n' \
       'deb http://deb.debian.org/debian bookworm main' \
       'deb http://deb.debian.org/debian bookworm-updates main' \
@@ -44,6 +45,7 @@ LABEL org.opencontainers.image.licenses="GPL-2.0-or-later"
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN rm -rf /etc/apt/sources.list.d/* \
+    && rm -f /var/lib/dpkg/statoverride /var/lib/dpkg/statoverride-old \
     && printf '%s\n' \
       'deb http://deb.debian.org/debian bookworm main' \
       'deb http://deb.debian.org/debian bookworm-updates main' \
