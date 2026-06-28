@@ -259,7 +259,7 @@ jobs:
             RELEASE="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
             JOB="opensips-promote-<< pipeline.number >>"
 
-            kubectl apply -f - <<YAML
+            kubectl apply -f - \<<YAML
             apiVersion: batch/v1
             kind: Job
             metadata:
