@@ -7,7 +7,13 @@ ARG OPENSIPS_VERSION=0.1.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -rf /etc/apt/sources.list.d/* \
+    && printf '%s\n' \
+      'deb http://deb.debian.org/debian bookworm main' \
+      'deb http://deb.debian.org/debian bookworm-updates main' \
+      'deb http://deb.debian.org/debian-security bookworm-security main' \
+      > /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates git build-essential bison flex pkg-config \
     libssl-dev libncurses-dev libxml2-dev libpcre3-dev \
     libcurl4-openssl-dev libhiredis-dev libmariadb-dev libmariadb-dev-compat \
@@ -37,7 +43,13 @@ LABEL org.opencontainers.image.licenses="GPL-2.0-or-later"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -rf /etc/apt/sources.list.d/* \
+    && printf '%s\n' \
+      'deb http://deb.debian.org/debian bookworm main' \
+      'deb http://deb.debian.org/debian bookworm-updates main' \
+      'deb http://deb.debian.org/debian-security bookworm-security main' \
+      > /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 libxml2 libpcre3 libcurl4 libhiredis0.14 \
     libmariadb3 libjson-c5 libevent-2.1-7 libxmlrpc-core-c3 libmemcached11 \
     libmicrohttpd12 libuuid1 dnsutils iputils-ping mariadb-client python3-minimal \
