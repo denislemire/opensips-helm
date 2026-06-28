@@ -22,8 +22,8 @@ RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" --recurse-submodules \
 
 WORKDIR /src/opensips
 ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar permissions"
-RUN make -j"$(nproc)" include_modules="${OPENSIPS_MODULES}" \
-    all && make -j"$(nproc)" include_modules="${OPENSIPS_MODULES}" \
+RUN make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
+    all && make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
     install
 
 FROM debian:bookworm-slim
@@ -43,7 +43,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmicrohttpd12 libuuid1 dnsutils iputils-ping mariadb-client python3-minimal \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local /usr/local
+COPY --from=builder /usr/sbin/opensips /usr/sbin/opensips
+COPY --from=builder /usr/lib/opensips /usr/lib/opensips
+COPY --from=builder /usr/share/opensips /usr/share/opensips
 COPY docker/discover-rtpengine.sh /usr/local/bin/discover-rtpengine.sh
 COPY docker/seed-db.sh /usr/local/bin/seed-db.sh
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh

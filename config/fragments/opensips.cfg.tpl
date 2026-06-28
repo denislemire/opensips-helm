@@ -4,7 +4,7 @@
 log_level=3
 stderror_enabled=yes
 syslog_enabled=no
-mpath="/usr/local/lib64/opensips/modules/"
+mpath="/usr/lib/opensips/modules/"
 
 {{- with .Values.sip.productName }}
 server_header={{ printf "Server: %s" . | quote }}

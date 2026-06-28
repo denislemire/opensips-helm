@@ -69,4 +69,4 @@ else
   sed -i '/@@UAC_AUTH_CREDENTIAL@@/d' "${run_cfg}"
 fi
 
-exec /usr/local/sbin/opensips -f "${run_cfg}" -F
+exec /usr/sbin/opensips -f "${run_cfg}" -F

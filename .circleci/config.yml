@@ -1,0 +1,173 @@
+version: '2.1'
+
+# Build the OpenSIPS container image and push it to the EHWS internal Zot registry.
+#
+# ┌─ Auth model ─────────────────────────────────────────────────────────────────┐
+# │  No credentials are stored in CircleCI.                                      │
+# │                                                                              │
+# │  CIRCLE_OIDC_TOKEN_V2  ──►  Authentik (zot-ci M2M provider)                 │
+# │                              └─►  short-lived JWT (RS256, ~5 min)            │
+# │                                    └─►  crane push --registry-token=<JWT>    │
+# │                                          └─►  Zot validates via Authentik    │
+# │                                               signing cert (bearer auth)     │
+# └──────────────────────────────────────────────────────────────────────────────┘
+#
+# The same CIRCLE_OIDC_TOKEN_V2 is used for kubectl access (ehws-cluster context)
+# and for registry push — one OIDC identity, two resource gates.
+#
+# Trigger manually via API (bump ehws_build when rebuilding the same OpenSIPS version):
+#
+#   curl -X POST https://circle.ehws.generic.business/api/v2/project/gh/denislemire/opensips-helm/pipeline \
+#     -H "Circle-Token: $CIRCLE_TOKEN" \
+#     -H "Content-Type: application/json" \
+#     -d '{
+#           "branch": "main",
+#           "parameters": {
+#             "opensips_version": "4.0.0",
+#             "ehws_build": "2"
+#           }
+#         }'
+#
+# Image tag format:  <opensips_version>-ehws-<ehws_build>
+# Example:           4.0.0-ehws-1
+#
+# Required CircleCI context (ehws-cluster):
+#   CIRCLE_OIDC_TOKEN_V2         — auto-injected by CircleCI when OIDC is enabled
+#   AUTHENTIK_OIDC_TOKEN_URL     — Authentik token endpoint
+#   AUTHENTIK_CLIENT_ID          — client_id for the Kubernetes OIDC provider
+#   AUTHENTIK_ZOT_CLIENT_ID      — client_id for the Zot CI M2M provider (zot-ci)
+#   KUBE_API_SERVER              — https://api.ehws.generic.business (or internal)
+#   KUBE_CA_B64                  — base64-encoded cluster CA certificate
+#
+# Registry prereqs (clusters/ehws/registry/):
+#   configmap-authentik-signing-cert.yaml  — Authentik public key for Zot bearer auth
+#   helm-release.yaml                      — Zot bearer auth + zot-ci access policy
+#
+# Authentik prereqs (clusters/ehws/authentik/):
+#   blueprint-zot-ci-m2m-configmap.yaml    — zot-ci provider with CircleCI federation
+
+parameters:
+  opensips_version:
+    type: string
+    default: "4.0.0"
+  ehws_build:
+    type: string
+    default: "1"
+  run_build:
+    type: boolean
+    default: true
+
+executors:
+  build:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: medium
+
+commands:
+  oidc_zot_token:
+    description: "Exchange CircleCI OIDC token for a Zot push bearer token via Authentik"
+    steps:
+      - run:
+          name: Exchange CIRCLE_OIDC_TOKEN_V2 → Authentik zot-ci token
+          command: |
+            set -euo pipefail
+
+            for key in AUTHENTIK_OIDC_TOKEN_URL AUTHENTIK_ZOT_CLIENT_ID; do
+              if [[ -z "${!key:-}" ]]; then
+                echo "Missing context variable: ${key}" >&2
+                exit 1
+              fi
+            done
+
+            if [[ -z "${CIRCLE_OIDC_TOKEN_V2:-}" ]]; then
+              echo "CIRCLE_OIDC_TOKEN_V2 unavailable; OIDC not enabled for this job." >&2
+              exit 1
+            fi
+
+            token_response="$(
+              curl -fsSL -X POST "${AUTHENTIK_OIDC_TOKEN_URL}" \
+                -H 'Content-Type: application/x-www-form-urlencoded' \
+                --data-urlencode 'grant_type=client_credentials' \
+                --data-urlencode "client_id=${AUTHENTIK_ZOT_CLIENT_ID}" \
+                --data-urlencode 'client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer' \
+                --data-urlencode "client_assertion=${CIRCLE_OIDC_TOKEN_V2}"
+            )"
+
+            access_token="$(
+              echo "${token_response}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))"
+            )"
+
+            if [[ -z "${access_token}" ]]; then
+              echo "Authentik zot-ci token exchange returned no access_token." >&2
+              echo "Response: ${token_response}" >&2
+              exit 1
+            fi
+
+            # Write to a temp file so the token stays out of env / process list
+            echo "${access_token}" > /tmp/zot-bearer-token
+            echo "Zot bearer token acquired."
+
+jobs:
+  build-and-push:
+    executor: build
+    environment:
+      ZOT_HOST: registry.ehws.generic.business
+      ZOT_IMAGE_PATH: ehws/opensips
+    steps:
+      - checkout
+      - oidc_zot_token
+      - run:
+          name: Set image tag
+          command: |
+            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws-<< pipeline.parameters.ehws_build >>"
+            echo "export IMAGE_TAG=${IMAGE_TAG}" >> "$BASH_ENV"
+            echo "Target: ${ZOT_HOST}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}"
+      - run:
+          name: Patch EHWS build number into source version string
+          command: |
+            # Expose EHWS_BUILD as a Dockerfile ARG so it reaches the make step
+            sed -i '/^ARG OPENSIPS_GIT_REF/a ARG EHWS_BUILD=1' docker/Dockerfile
+            # After git clone, patch EXTRA_VER so the binary reports 4.0.0-ehws-N
+            # instead of the upstream oversight (4.0.0-rc1 left in the 4.0.0 tag)
+            sed -i \
+              '/git clone.*opensips\.git opensips/a RUN sed -i "s|^EXTRA_VER.*$|EXTRA_VER ?= -ehws-${EHWS_BUILD}|" /src/opensips/Makefile.defs' \
+              docker/Dockerfile
+      - run:
+          name: Build with Kaniko (no push — output to tarball)
+          no_output_timeout: 45m
+          command: |
+            set -euo pipefail
+            docker run \
+              -v "${PWD}:/workspace" \
+              -v "/tmp/kaniko-out:/out" \
+              gcr.io/kaniko-project/executor:v1.23.2 \
+              --dockerfile=/workspace/docker/Dockerfile \
+              --context=/workspace \
+              --no-push \
+              --tarPath=/out/image.tar \
+              --destination="${ZOT_HOST}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}" \
+              --build-arg="OPENSIPS_VERSION=${IMAGE_TAG}" \
+              --build-arg="OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>" \
+              --build-arg="EHWS_BUILD=<< pipeline.parameters.ehws_build >>" \
+              --cache=false \
+              --verbosity=info
+      - run:
+          name: Push with crane using OIDC bearer token
+          command: |
+            set -euo pipefail
+            ZOT_TOKEN="$(cat /tmp/zot-bearer-token)"
+            docker run \
+              -v "/tmp/kaniko-out:/out" \
+              gcr.io/go-containerregistry/crane:latest \
+              push /out/image.tar \
+              "${ZOT_HOST}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}" \
+              --registry-token="${ZOT_TOKEN}"
+            echo "Pushed: ${ZOT_HOST}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}"
+
+workflows:
+  build-opensips:
+    when: << pipeline.parameters.run_build >>
+    jobs:
+      - build-and-push:
+          context: ehws-cluster
