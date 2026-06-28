@@ -101,7 +101,8 @@ commands:
           name: Install kubectl
           command: |
             set -euo pipefail
-            curl -fsSL 'https://dl.k8s.io/release/v1.36.1/bin/linux/amd64/kubectl' \
+            curl --retry 5 --retry-all-errors --connect-timeout 10 -fsSL \
+              'https://dl.k8s.io/release/v1.36.1/bin/linux/amd64/kubectl' \
               -o /tmp/kubectl
             chmod +x /tmp/kubectl
             sudo mv /tmp/kubectl /usr/local/bin/kubectl
@@ -130,6 +131,13 @@ jobs:
             IMAGE_TAG="${RELEASE_TAG}-candidate"
             JOB="opensips-image-${CIRCLE_BUILD_NUM}"
             export IMAGE_TAG JOB
+            cleanup() {
+              [[ -n "${LOG_PID:-}" ]] && kill "${LOG_PID}" 2>/dev/null || true
+              kubectl -n opensips delete job "${JOB}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+            }
+            trap cleanup EXIT
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
 
             kubectl apply -f - \<<YAML
             apiVersion: batch/v1
@@ -195,7 +203,6 @@ jobs:
               --for=condition=Ready --timeout=5m
             kubectl -n opensips logs -f "job/${JOB}" -c kaniko &
             LOG_PID=$!
-            trap 'kill "${LOG_PID}" 2>/dev/null || true' EXIT
 
             for attempt in $(seq 1 450); do
               complete=$(kubectl -n opensips get job "${JOB}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')
@@ -238,7 +245,7 @@ jobs:
             helm template "${RELEASE}" . --namespace opensips -f "${VALUES}" \
               --set-string opensips.image.tag="${IMAGE_TAG}" \
               --set-string validation.expectedVersion="${RELEASE_TAG}" \
-              --set-string mariadb.auth.existingSecret=opensips-opensips-mariadb \
+              --set-string mariadb.auth.existingSecret=opensips-mariadb-credentials \
               --set validation.enabled=true \
               --show-only templates/configmap.yaml \
               --show-only templates/config-validation-job.yaml \
@@ -261,6 +268,7 @@ jobs:
             CANDIDATE="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>-candidate"
             RELEASE="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
             JOB="opensips-promote-<< pipeline.number >>"
+            trap 'kubectl -n opensips delete job "${JOB}" --ignore-not-found --wait=false >/dev/null 2>&1 || true' EXIT
 
             kubectl apply -f - \<<YAML
             apiVersion: batch/v1
