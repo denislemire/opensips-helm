@@ -14,8 +14,11 @@ if [[ ! -f "${template_dir}/opensips.cfg" ]]; then
   exit 1
 fi
 
-RTPENGINE_SOCKETS="$(/usr/local/bin/discover-rtpengine.sh)"
-export RTPENGINE_SOCKETS
+# Allow CI to inject RTPENGINE_SOCKETS directly and skip DNS discovery
+if [[ -z "${RTPENGINE_SOCKETS:-}" ]]; then
+  RTPENGINE_SOCKETS="$(/usr/local/bin/discover-rtpengine.sh)"
+  export RTPENGINE_SOCKETS
+fi
 
 if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
   db_user_enc=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$MARIADB_USER")
@@ -67,6 +70,11 @@ if [[ "${REGISTRATION_ENABLED:-false}" == "true" && -n "${REGISTRATION_USERNAME:
   sed -i "s|@@UAC_AUTH_CREDENTIAL@@|modparam(\"uac_auth\", \"credential\", \"${escaped_uac_cred}\")|" "${run_cfg}"
 else
   sed -i '/@@UAC_AUTH_CREDENTIAL@@/d' "${run_cfg}"
+fi
+
+# OPENSIPS_CHECK_ONLY=true: validate config and exit — used by CI
+if [[ "${OPENSIPS_CHECK_ONLY:-false}" == "true" ]]; then
+  exec /usr/sbin/opensips -C -f "${run_cfg}"
 fi
 
 exec /usr/sbin/opensips -f "${run_cfg}" -F

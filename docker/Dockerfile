@@ -49,6 +49,9 @@ COPY --from=builder /usr/share/opensips /usr/share/opensips
 COPY docker/discover-rtpengine.sh /usr/local/bin/discover-rtpengine.sh
 COPY docker/seed-db.sh /usr/local/bin/seed-db.sh
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+# Bake config templates into the image as a default; K8s ConfigMap mount overlays
+# this path at runtime. Allows opensips -C -f self-validation in CI without a mount.
+COPY config/fragments/ /etc/opensips/template/
 
 RUN chmod +x /usr/local/bin/discover-rtpengine.sh \
     /usr/local/bin/seed-db.sh /usr/local/bin/entrypoint.sh

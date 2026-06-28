@@ -5,46 +5,51 @@ version: '2.1'
 # ┌─ Auth model ─────────────────────────────────────────────────────────────────┐
 # │  No credentials are stored in CircleCI.                                      │
 # │                                                                              │
-# │  CIRCLE_OIDC_TOKEN_V2  ──►  Authentik (zot-ci M2M provider)                 │
-# │                              └─►  short-lived JWT (RS256, ~5 min)            │
-# │                                    └─►  crane push --registry-token=<JWT>    │
-# │                                          └─►  Zot validates via Authentik    │
-# │                                               signing cert (bearer auth)     │
+# │  Image push (crane):                                                         │
+# │    CIRCLE_OIDC_TOKEN_V2 ──► Authentik (zot-ci M2M provider)                 │
+# │                              └─► short-lived JWT (RS256, ~5 min)             │
+# │                                   └─► crane push --registry-token=<JWT>     │
+# │                                        └─► Zot validates via Authentik cert  │
+# │                                                                              │
+# │  Chart push (helm):                                                          │
+# │    CIRCLE_OIDC_TOKEN_V2 ──► Authentik (kubectl provider) ──► kubeconfig     │
+# │                              └─► kubectl get secret registry-push-auth      │
+# │                                   └─► helm registry login ──► helm push     │
 # └──────────────────────────────────────────────────────────────────────────────┘
 #
-# The same CIRCLE_OIDC_TOKEN_V2 is used for kubectl access (ehws-cluster context)
-# and for registry push — one OIDC identity, two resource gates.
-#
-# Trigger manually via API (bump ehws_build when rebuilding the same OpenSIPS version):
+# Trigger manually to rebuild or bump the build number:
 #
 #   curl -X POST https://circle.ehws.generic.business/api/v2/project/gh/denislemire/opensips-helm/pipeline \
 #     -H "Circle-Token: $CIRCLE_TOKEN" \
 #     -H "Content-Type: application/json" \
 #     -d '{
-#           "branch": "main",
+#           "branch": "master",
 #           "parameters": {
 #             "opensips_version": "4.0.0",
 #             "ehws_build": "2"
 #           }
 #         }'
 #
-# Image tag format:  <opensips_version>-ehws-<ehws_build>
-# Example:           4.0.0-ehws-1
+# Image tag format:  <opensips_version>-ehws-<ehws_build>   (e.g. 4.0.0-ehws-1)
+# Chart OCI path:    registry.ehws.generic.business/ehws/charts/opensips:<chart_version>
 #
 # Required CircleCI context (ehws-cluster):
-#   CIRCLE_OIDC_TOKEN_V2         — auto-injected by CircleCI when OIDC is enabled
-#   AUTHENTIK_OIDC_TOKEN_URL     — Authentik token endpoint
-#   AUTHENTIK_CLIENT_ID          — client_id for the Kubernetes OIDC provider
-#   AUTHENTIK_ZOT_CLIENT_ID      — client_id for the Zot CI M2M provider (zot-ci)
-#   KUBE_API_SERVER              — https://api.ehws.generic.business (or internal)
-#   KUBE_CA_B64                  — base64-encoded cluster CA certificate
+#   CIRCLE_OIDC_TOKEN_V2     — auto-injected when OIDC is enabled for the job
+#   AUTHENTIK_OIDC_TOKEN_URL — Authentik token endpoint
+#   AUTHENTIK_CLIENT_ID      — client_id for the kubectl OIDC provider
+#   AUTHENTIK_ZOT_CLIENT_ID  — client_id for the Zot CI M2M provider (zot-ci)
+#   KUBE_API_SERVER          — https://api.ehws.generic.business
+#   KUBE_CA_B64              — base64-encoded cluster CA certificate
 #
 # Registry prereqs (clusters/ehws/registry/):
 #   configmap-authentik-signing-cert.yaml  — Authentik public key for Zot bearer auth
 #   helm-release.yaml                      — Zot bearer auth + zot-ci access policy
 #
 # Authentik prereqs (clusters/ehws/authentik/):
-#   blueprint-zot-ci-m2m-configmap.yaml    — zot-ci provider with CircleCI federation
+#   blueprint-zot-ci-m2m-configmap.yaml    — zot-ci M2M provider with CircleCI federation
+#
+# RBAC prereqs (clusters/ehws/opensips/):
+#   circleci-registry-reader.yaml          — allows circleci-oidc to read registry-push-auth
 
 parameters:
   opensips_version:
@@ -58,17 +63,23 @@ parameters:
     default: true
 
 executors:
+  # Docker executor on the Nomad runner — supports setup_remote_docker for image builds
   build:
-    machine:
-      image: ubuntu-2204:current
-    resource_class: medium
+    docker:
+      - image: cimg/base:2026.06
+    resource_class: small
+  # Container runner — lightweight K8s pod for tool-only jobs (kubectl, helm, no Docker)
+  tools:
+    docker:
+      - image: cimg/base:2026.06
+    resource_class: denislemire.ehws
 
 commands:
   oidc_zot_token:
-    description: "Exchange CircleCI OIDC token for a Zot push bearer token via Authentik"
+    description: "Exchange CircleCI OIDC token for an Authentik zot-ci bearer token (crane push)"
     steps:
       - run:
-          name: Exchange CIRCLE_OIDC_TOKEN_V2 → Authentik zot-ci token
+          name: Exchange CIRCLE_OIDC_TOKEN_V2 for Authentik zot-ci token
           command: |
             set -euo pipefail
 
@@ -80,7 +91,7 @@ commands:
             done
 
             if [[ -z "${CIRCLE_OIDC_TOKEN_V2:-}" ]]; then
-              echo "CIRCLE_OIDC_TOKEN_V2 unavailable; OIDC not enabled for this job." >&2
+              echo "CIRCLE_OIDC_TOKEN_V2 unavailable; ensure OIDC is enabled for this job." >&2
               exit 1
             fi
 
@@ -94,76 +105,251 @@ commands:
             )"
 
             access_token="$(
-              echo "${token_response}" \
-              | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))"
+              TOKEN_RESPONSE="${token_response}" python3 -c "
+            import json, os, sys
+            resp = json.loads(os.environ['TOKEN_RESPONSE'])
+            token = resp.get('access_token', '')
+            if not token:
+                print('No access_token in response:', file=sys.stderr)
+                print(os.environ['TOKEN_RESPONSE'], file=sys.stderr)
+                sys.exit(1)
+            print(token, end='')
+            ")"
+
+            printf '%s' "${access_token}" > /tmp/zot-bearer-token
+            echo "Zot bearer token acquired (${#access_token} chars)."
+
+  oidc_kubeconfig:
+    description: "Exchange CircleCI OIDC token for a kubeconfig (kubectl/helm access)"
+    steps:
+      - run:
+          name: Exchange CIRCLE_OIDC_TOKEN_V2 for kubeconfig
+          command: |
+            set -euo pipefail
+
+            for key in AUTHENTIK_OIDC_TOKEN_URL AUTHENTIK_CLIENT_ID KUBE_API_SERVER KUBE_CA_B64; do
+              if [[ -z "${!key:-}" ]]; then
+                echo "Missing context variable: ${key}" >&2
+                exit 1
+              fi
+            done
+
+            printf '%s' "${KUBE_CA_B64}" | base64 --decode > /tmp/ehws-ca.crt
+
+            token_response="$(
+              curl -fsSL -X POST "${AUTHENTIK_OIDC_TOKEN_URL}" \
+                -H 'Content-Type: application/x-www-form-urlencoded' \
+                --data-urlencode 'grant_type=client_credentials' \
+                --data-urlencode 'scope=openid profile' \
+                --data-urlencode "client_id=${AUTHENTIK_CLIENT_ID}" \
+                --data-urlencode 'client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer' \
+                --data-urlencode "client_assertion=${CIRCLE_OIDC_TOKEN_V2}"
             )"
 
-            if [[ -z "${access_token}" ]]; then
-              echo "Authentik zot-ci token exchange returned no access_token." >&2
-              echo "Response: ${token_response}" >&2
-              exit 1
-            fi
+            access_token="$(
+              TOKEN_RESPONSE="${token_response}" python3 -c "
+            import json, os, sys
+            token = json.loads(os.environ['TOKEN_RESPONSE']).get('access_token', '')
+            if not token:
+                sys.exit(1)
+            print(token, end='')
+            ")"
 
-            # Write to a temp file so the token stays out of env / process list
-            echo "${access_token}" > /tmp/zot-bearer-token
-            echo "Zot bearer token acquired."
+            kubectl config set-cluster ehws \
+              --server="${KUBE_API_SERVER}" \
+              --certificate-authority=/tmp/ehws-ca.crt \
+              --embed-certs=true
+            kubectl config set-credentials circleci-oidc --token="${access_token}"
+            kubectl config set-context ehws --cluster=ehws --user=circleci-oidc
+            kubectl config use-context ehws
+            echo "Kubeconfig ready; verifying..."
+            kubectl get namespaces --request-timeout=20s -o name
+
+  install_crane:
+    description: "Install crane binary for OCI push with bearer token"
+    steps:
+      - run:
+          name: Install crane
+          command: |
+            set -euo pipefail
+            CRANE_VERSION="0.20.3"
+            curl -fsSL \
+              "https://github.com/google/go-containerregistry/releases/download/v${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+              | sudo tar xz -C /usr/local/bin crane
+            crane version
+
+  install_kubectl:
+    description: "Install kubectl pinned to cluster minor version"
+    steps:
+      - run:
+          name: Install kubectl
+          command: |
+            set -euo pipefail
+            curl -fsSL 'https://dl.k8s.io/release/v1.36.1/bin/linux/amd64/kubectl' \
+              -o /tmp/kubectl
+            chmod +x /tmp/kubectl
+            sudo mv /tmp/kubectl /usr/local/bin/kubectl
+            kubectl version --client
+
+  install_helm:
+    description: "Install helm (latest stable)"
+    steps:
+      - run:
+          name: Install helm
+          command: |
+            set -euo pipefail
+            curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
+              | bash
+            helm version
 
 jobs:
   build-and-push:
     executor: build
     environment:
-      ZOT_HOST: registry.ehws.generic.business
+      ZOT_REGISTRY: registry.ehws.generic.business
       ZOT_IMAGE_PATH: ehws/opensips
     steps:
       - checkout
+      - setup_remote_docker
       - oidc_zot_token
+      - install_crane
       - run:
           name: Set image tag
           command: |
             IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws-<< pipeline.parameters.ehws_build >>"
             echo "export IMAGE_TAG=${IMAGE_TAG}" >> "$BASH_ENV"
-            echo "Target: ${ZOT_HOST}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}"
+            echo "Target: ${ZOT_REGISTRY}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}"
       - run:
-          name: Patch EHWS build number into source version string
+          name: Patch Dockerfile — EHWS_BUILD ARG and EXTRA_VER version string fix
           command: |
-            # Expose EHWS_BUILD as a Dockerfile ARG so it reaches the make step
-            sed -i '/^ARG OPENSIPS_GIT_REF/a ARG EHWS_BUILD=1' docker/Dockerfile
-            # After git clone, patch EXTRA_VER so the binary reports 4.0.0-ehws-N
-            # instead of the upstream oversight (4.0.0-rc1 left in the 4.0.0 tag)
-            sed -i \
-              '/git clone.*opensips\.git opensips/a RUN sed -i "s|^EXTRA_VER.*$|EXTRA_VER ?= -ehws-${EHWS_BUILD}|" /src/opensips/Makefile.defs' \
-              docker/Dockerfile
+            # The upstream 4.0.0 stable tag left EXTRA_VER=-rc1 in Makefile.defs.
+            # We inject an EHWS_BUILD ARG and overwrite EXTRA_VER so the binary reports
+            # e.g. "4.0.0-ehws-1". Using Python to avoid shell-quoting pain.
+            python3 - <<'PY'
+            with open('docker/Dockerfile', 'r') as f:
+                content = f.read()
+
+            # Add ARG EHWS_BUILD before ARG OPENSIPS_GIT_REF
+            content = content.replace(
+                'ARG OPENSIPS_GIT_REF=4.0\n',
+                'ARG EHWS_BUILD=1\nARG OPENSIPS_GIT_REF=4.0\n',
+                1
+            )
+
+            # Patch EXTRA_VER immediately after WORKDIR /src/opensips (builder stage)
+            ver_patch = "RUN sed -i 's|^EXTRA_VER.*$|EXTRA_VER ?= -ehws-${EHWS_BUILD}|' Makefile.defs\n"
+            content = content.replace(
+                'WORKDIR /src/opensips\n',
+                'WORKDIR /src/opensips\n' + ver_patch,
+                1
+            )
+
+            with open('docker/Dockerfile', 'w') as f:
+                f.write(content)
+
+            print('Dockerfile patched:')
+            for i, line in enumerate(content.splitlines(), 1):
+                if 'EHWS_BUILD' in line or 'EXTRA_VER' in line:
+                    print(f'  [{i:3d}] {line}')
+            PY
       - run:
-          name: Build with Kaniko (no push — output to tarball)
-          no_output_timeout: 45m
+          name: Build image (source compile — 60 min timeout)
+          no_output_timeout: 60m
           command: |
             set -euo pipefail
-            docker run \
-              -v "${PWD}:/workspace" \
-              -v "/tmp/kaniko-out:/out" \
-              gcr.io/kaniko-project/executor:v1.23.2 \
-              --dockerfile=/workspace/docker/Dockerfile \
-              --context=/workspace \
-              --no-push \
-              --tarPath=/out/image.tar \
-              --destination="${ZOT_HOST}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}" \
-              --build-arg="OPENSIPS_VERSION=${IMAGE_TAG}" \
-              --build-arg="OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>" \
-              --build-arg="EHWS_BUILD=<< pipeline.parameters.ehws_build >>" \
-              --cache=false \
-              --verbosity=info
+            docker build \
+              --file docker/Dockerfile \
+              --build-arg "OPENSIPS_VERSION=${IMAGE_TAG}" \
+              --build-arg "OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>" \
+              --build-arg "EHWS_BUILD=<< pipeline.parameters.ehws_build >>" \
+              --tag "${ZOT_REGISTRY}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}" \
+              .
       - run:
-          name: Push with crane using OIDC bearer token
+          name: Verify binary — version string must contain 'ehws'
+          command: |
+            set -euo pipefail
+            version_output="$(docker run --rm \
+              "${ZOT_REGISTRY}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}" \
+              /usr/sbin/opensips -V 2>&1 || true)"
+            echo "${version_output}"
+            if ! echo "${version_output}" | grep -q "ehws"; then
+              echo "ERROR: 'ehws' not in version string — EXTRA_VER patch failed." >&2
+              exit 1
+            fi
+            echo "Version check passed."
+      - run:
+          name: Validate config — entrypoint assembles config and runs opensips -C -f
+          command: |
+            # OPENSIPS_CHECK_ONLY=true: entrypoint.sh assembles the full config from
+            # templates baked into the image at /etc/opensips/template/ (COPY added to
+            # Dockerfile), then runs opensips -C -f and exits. The K8s ConfigMap mount
+            # overlays that path in production.
+            docker run --rm \
+              -e MARIADB_ENABLED=false \
+              -e TLS_ENABLED=false \
+              -e PROMETHEUS_ENABLED=false \
+              -e REGISTRATION_ENABLED=false \
+              -e RTPENGINE_SOCKETS="udp:127.0.0.1:2223" \
+              -e OPENSIPS_CHECK_ONLY=true \
+              "${ZOT_REGISTRY}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}"
+      - run:
+          name: Export image tarball for crane push
+          command: |
+            set -euo pipefail
+            docker save "${ZOT_REGISTRY}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}" \
+              | gzip > /tmp/image.tar.gz
+            echo "Tarball: $(du -sh /tmp/image.tar.gz | cut -f1)"
+      - run:
+          name: Push to Zot via crane + OIDC bearer token
           command: |
             set -euo pipefail
             ZOT_TOKEN="$(cat /tmp/zot-bearer-token)"
-            docker run \
-              -v "/tmp/kaniko-out:/out" \
-              gcr.io/go-containerregistry/crane:latest \
-              push /out/image.tar \
-              "${ZOT_HOST}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}" \
+            crane push /tmp/image.tar.gz \
+              "${ZOT_REGISTRY}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}" \
               --registry-token="${ZOT_TOKEN}"
-            echo "Pushed: ${ZOT_HOST}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}"
+            echo "Pushed: ${ZOT_REGISTRY}/${ZOT_IMAGE_PATH}:${IMAGE_TAG}"
+
+  publish-chart:
+    executor: tools
+    environment:
+      ZOT_REGISTRY: registry.ehws.generic.business
+      ZOT_CHART_PATH: ehws/charts
+    steps:
+      - checkout
+      - install_kubectl
+      - install_helm
+      - oidc_kubeconfig
+      - run:
+          name: Fetch Zot push credentials from cluster
+          command: |
+            set -euo pipefail
+            # registry-push-auth is a 1Password-synced Secret in the opensips namespace.
+            # circleci-registry-reader.yaml grants the circleci-oidc group read access.
+            ZOT_PASS="$(kubectl get secret registry-push-auth \
+              -n opensips \
+              -o jsonpath='{.data.password}' \
+              | base64 --decode)"
+            printf '%s' "${ZOT_PASS}" > /tmp/zot-admin-pass
+            echo "Zot push credentials retrieved."
+      - run:
+          name: Helm registry login
+          command: |
+            cat /tmp/zot-admin-pass \
+              | helm registry login "${ZOT_REGISTRY}" \
+                  --username admin \
+                  --password-stdin
+            echo "Logged in to ${ZOT_REGISTRY}."
+      - run:
+          name: Package and push Helm chart to Zot OCI
+          command: |
+            set -euo pipefail
+            CHART_VERSION="$(grep '^version:' Chart.yaml | awk '{print $2}')"
+            echo "Chart version: ${CHART_VERSION}"
+            mkdir -p /tmp/charts
+            helm package . --destination /tmp/charts/
+            CHART_FILE="/tmp/charts/opensips-${CHART_VERSION}.tgz"
+            helm push "${CHART_FILE}" "oci://${ZOT_REGISTRY}/${ZOT_CHART_PATH}"
+            echo "Pushed: oci://${ZOT_REGISTRY}/${ZOT_CHART_PATH}/opensips:${CHART_VERSION}"
 
 workflows:
   build-opensips:
@@ -171,3 +357,7 @@ workflows:
     jobs:
       - build-and-push:
           context: ehws-cluster
+      - publish-chart:
+          context: ehws-cluster
+          requires:
+            - build-and-push
