@@ -54,11 +54,6 @@ executors:
     docker:
       - image: cimg/base:2026.06
     resource_class: denislemire/ehws
-  kaniko:
-    docker:
-      - image: gcr.io/kaniko-project/executor:v1.23.2-debug
-    resource_class: denislemire/ehws
-    shell: /busybox/sh -eo pipefail
 
 commands:
   oidc_kubeconfig:
@@ -103,43 +98,6 @@ commands:
             kubectl config use-context ehws
             kubectl get namespaces --request-timeout=20s -o name
 
-  oidc_zot_token:
-    description: "Exchange CIRCLE_OIDC_TOKEN_V2 for a Zot registry bearer token"
-    steps:
-      - run:
-          name: Exchange OIDC token for Zot bearer token
-          command: |
-            set -euo pipefail
-            # Requires: blueprint-zot-ci-m2m applied + Zot bearer auth (ehws-infra PR #552)
-            CIRCLE_ASSERTION="${CIRCLE_OIDC_TOKEN_V2}" python3 - \<<'PY'
-            import base64, json, os
-
-            payload = os.environ["CIRCLE_ASSERTION"].split(".")[1]
-            payload += "=" * (-len(payload) % 4)
-            claims = json.loads(base64.urlsafe_b64decode(payload))
-            safe_keys = ("iss", "aud", "sub", "iat", "exp", "oidc.circleci.com/project-id", "oidc.circleci.com/context-ids")
-            print("CircleCI assertion claims:", json.dumps({key: claims.get(key) for key in safe_keys}, sort_keys=True))
-            PY
-            bearer="$(
-              TOKEN_RESPONSE="$(
-                curl -sS -X POST "https://auth.ehws.generic.business/application/o/token/" \
-                  -H 'Content-Type: application/x-www-form-urlencoded' \
-                  --data-urlencode 'grant_type=client_credentials' \
-                  --data-urlencode 'scope=openid profile' \
-                  --data-urlencode 'client_id=zot-ci' \
-                  --data-urlencode 'client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer' \
-                  --data-urlencode "client_assertion=${CIRCLE_OIDC_TOKEN_V2}"
-              )" python3 -c "
-            import json, os, sys
-            response = json.loads(os.environ['TOKEN_RESPONSE'])
-            token = response.get('access_token', '')
-            if not token:
-                print('Authentik token error:', json.dumps(response), file=sys.stderr)
-                sys.exit(1)
-            print(token, end='')
-            ")"
-            printf '%s' "${bearer}" > /tmp/zot-bearer-token
-
   install_kubectl:
     steps:
       - run:
@@ -160,66 +118,100 @@ commands:
             curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
               | bash
 
-  install_crane:
-    description: "Install crane"
-    steps:
-      - run:
-          name: Install crane
-          command: |
-            set -euo pipefail
-            curl -fsSL \
-              https://github.com/google/go-containerregistry/releases/download/v0.20.6/go-containerregistry_Linux_x86_64.tar.gz \
-              | tar -xzf - -C /tmp crane
-
 jobs:
   build-image:
-    executor: kaniko
-    steps:
-      - run:
-          name: Build image with isolated Kaniko
-          no_output_timeout: 75m
-          command: |
-            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.parameters.ehws_build >>"
-            /kaniko/executor \
-              --dockerfile=docker/Dockerfile \
-              --context="git://github.com/denislemire/opensips-helm.git#refs/heads/${CIRCLE_BRANCH}#${CIRCLE_SHA1}" \
-              --destination="registry.ehws.generic.business/ehws/opensips:${IMAGE_TAG}" \
-              --no-push \
-              --tar-path=/tmp/opensips-image.tar \
-              --build-arg="OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>" \
-              --build-arg="EHWS_BUILD=<< pipeline.parameters.ehws_build >>" \
-              --build-arg="OPENSIPS_VERSION=${IMAGE_TAG}" \
-              --cache=false \
-              --log-format=text
-      - persist_to_workspace:
-          root: /tmp
-          paths:
-            - opensips-image.tar
-
-  push-image:
     executor: default
     steps:
-      - attach_workspace:
-          at: /workspace
       - install_kubectl
-      - install_crane
       - oidc_kubeconfig
       - run:
-          name: Push image via Crane with OIDC-fetched credentials
+          name: Build and push image with in-cluster Kaniko
+          no_output_timeout: 75m
           command: |
             set -euo pipefail
             IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.parameters.ehws_build >>"
-            DEST="zot.registry.svc.cluster.local:5000/ehws/opensips:${IMAGE_TAG}"
-            ZOT_PASS="$(
-              kubectl get secret registry-push-auth -n opensips \
-                -o jsonpath='{.data.password}' | base64 --decode
-            )"
-            printf '%s' "${ZOT_PASS}" \
-              | /tmp/crane auth login zot.registry.svc.cluster.local:5000 \
-                  --username admin --password-stdin --insecure
-            /tmp/crane push /workspace/opensips-image.tar "${DEST}" \
-              --insecure
-            echo "Pushed: ${DEST}"
+            JOB="opensips-image-${CIRCLE_BUILD_NUM}"
+            export IMAGE_TAG JOB
+
+            kubectl apply -f - \<<YAML
+            apiVersion: batch/v1
+            kind: Job
+            metadata:
+              name: ${JOB}
+              namespace: opensips
+            spec:
+              ttlSecondsAfterFinished: 3600
+              backoffLimit: 0
+              template:
+                spec:
+                  automountServiceAccountToken: false
+                  restartPolicy: Never
+                  initContainers:
+                    - name: docker-config
+                      image: alpine:3.22
+                      command: ["/bin/sh", "-c"]
+                      args:
+                        - |
+                          set -eu
+                          AUTH=$(printf 'admin:%s' "$(cat /zot-auth/password)" | base64 | tr -d '\n')
+                          printf '{"auths":{"zot.registry.svc.cluster.local:5000":{"auth":"%s"}}}' \
+                            "$AUTH" > /kaniko/.docker/config.json
+                      volumeMounts:
+                        - name: zot-auth
+                          mountPath: /zot-auth
+                          readOnly: true
+                        - name: docker-config
+                          mountPath: /kaniko/.docker
+                  containers:
+                    - name: kaniko
+                      image: gcr.io/kaniko-project/executor:v1.23.2
+                      args:
+                        - --dockerfile=docker/Dockerfile
+                        - --context=git://github.com/denislemire/opensips-helm.git#refs/heads/${CIRCLE_BRANCH}#${CIRCLE_SHA1}
+                        - --destination=zot.registry.svc.cluster.local:5000/ehws/opensips:${IMAGE_TAG}
+                        - --build-arg=OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>
+                        - --build-arg=EHWS_BUILD=<< pipeline.parameters.ehws_build >>
+                        - --build-arg=OPENSIPS_VERSION=${IMAGE_TAG}
+                        - --cache=false
+                        - --insecure
+                        - --log-format=text
+                      env:
+                        - name: DOCKER_CONFIG
+                          value: /kaniko/.docker
+                      volumeMounts:
+                        - name: docker-config
+                          mountPath: /kaniko/.docker
+                          readOnly: true
+                      resources:
+                        requests: {cpu: "2", memory: 4Gi}
+                        limits: {cpu: "4", memory: 8Gi}
+                  volumes:
+                    - name: docker-config
+                      emptyDir: {}
+                    - name: zot-auth
+                      secret:
+                        secretName: registry-push-auth
+            YAML
+
+            for attempt in $(seq 1 450); do
+              complete=$(kubectl -n opensips get job "${JOB}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')
+              failed=$(kubectl -n opensips get job "${JOB}" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}')
+              if [[ "${complete}" == "True" ]]; then
+                kubectl -n opensips logs "job/${JOB}" -c kaniko
+                echo "Pushed: registry.ehws.generic.business/ehws/opensips:${IMAGE_TAG}"
+                exit 0
+              fi
+              if [[ "${failed}" == "True" ]]; then
+                kubectl -n opensips logs "job/${JOB}" -c kaniko || true
+                kubectl -n opensips describe job "${JOB}"
+                exit 1
+              fi
+              (( attempt % 6 == 0 )) && echo "Build still running (${attempt}0s)..."
+              sleep 10
+            done
+            kubectl -n opensips logs "job/${JOB}" -c kaniko || true
+            echo "Timed out waiting for ${JOB}" >&2
+            exit 1
 
   publish-chart:
     executor: default
@@ -252,12 +244,9 @@ workflows:
   build-opensips:
     when: << pipeline.parameters.run_build >>
     jobs:
-      - build-image
-      - push-image:
+      - build-image:
           context: ehws-authentik-oidc
-          requires:
-            - build-image
       - publish-chart:
           context: ehws-authentik-oidc
           requires:
-            - push-image
+            - build-image
