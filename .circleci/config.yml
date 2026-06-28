@@ -96,7 +96,7 @@ commands:
             kubectl config set-credentials circleci-oidc --token="${access_token}"
             kubectl config set-context ehws --cluster=ehws --user=circleci-oidc
             kubectl config use-context ehws
-            kubectl get namespaces --request-timeout=20s -o name
+            kubectl get nodes --request-timeout=20s -o wide
 
   install_kubectl:
     steps:
@@ -193,11 +193,17 @@ jobs:
                         secretName: registry-push-auth
             YAML
 
+            kubectl -n opensips wait pod -l "job-name=${JOB}" \
+              --for=condition=Ready --timeout=5m
+            kubectl -n opensips logs -f "job/${JOB}" -c kaniko &
+            LOG_PID=$!
+            trap 'kill "${LOG_PID}" 2>/dev/null || true' EXIT
+
             for attempt in $(seq 1 450); do
               complete=$(kubectl -n opensips get job "${JOB}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')
               failed=$(kubectl -n opensips get job "${JOB}" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}')
               if [[ "${complete}" == "True" ]]; then
-                kubectl -n opensips logs "job/${JOB}" -c kaniko
+                wait "${LOG_PID}" || true
                 echo "Pushed: registry.ehws.generic.business/ehws/opensips:${IMAGE_TAG}"
                 exit 0
               fi
