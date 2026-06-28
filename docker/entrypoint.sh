@@ -70,6 +70,9 @@ fi
 
 # OPENSIPS_CHECK_ONLY=true: validate config and exit — used by CI
 if [[ "${OPENSIPS_CHECK_ONLY:-false}" == "true" ]]; then
+  if [[ -n "${OPENSIPS_EXPECTED_VERSION:-}" ]]; then
+    /usr/sbin/opensips -V | grep -Fqx "version: opensips ${OPENSIPS_EXPECTED_VERSION} (x86_64/linux)"
+  fi
   exec /usr/sbin/opensips -C -f "${run_cfg}"
 fi
 

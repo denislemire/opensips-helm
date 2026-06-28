@@ -30,10 +30,11 @@ RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" --recurse-submodules \
     https://github.com/OpenSIPS/opensips.git opensips
 
 WORKDIR /src/opensips
-RUN sed -i "s|^EXTRA_VER.*$|EXTRA_VER ?= -ehws-${EHWS_BUILD}|" Makefile.defs
 ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar permissions"
 RUN make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
-    all && make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
+    OPENSIPS_RELEASE="${OPENSIPS_VERSION}" all \
+    && make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
+    OPENSIPS_RELEASE="${OPENSIPS_VERSION}" \
     install
 
 FROM debian:bookworm-slim
@@ -43,6 +44,7 @@ ARG OPENSIPS_VERSION=0.1.0
 LABEL org.opencontainers.image.version="${OPENSIPS_VERSION}"
 LABEL org.opencontainers.image.source="https://github.com/denislemire/opensips-helm"
 LABEL org.opencontainers.image.authors="Denis Lemire <denis@lemire.name>"
+LABEL org.opencontainers.image.vendor="Generic dot Business Ltd"
 LABEL org.opencontainers.image.licenses="GPL-2.0-or-later"
 
 ENV DEBIAN_FRONTEND=noninteractive

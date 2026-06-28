@@ -177,3 +177,4 @@ imagePullSecrets: []
 # Intended for CI; it never contacts or seeds MariaDB.
 validation:
   enabled: false
+  expectedVersion: ""

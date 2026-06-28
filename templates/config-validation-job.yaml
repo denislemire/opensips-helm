@@ -28,6 +28,8 @@ spec:
           env:
             - name: OPENSIPS_CHECK_ONLY
               value: "true"
+            - name: OPENSIPS_EXPECTED_VERSION
+              value: {{ default .Values.opensips.image.tag .Values.validation.expectedVersion | quote }}
             - name: RTPENGINE_SOCKETS
               value: "udp:127.0.0.1:2223"
             - name: REGISTRATION_ENABLED

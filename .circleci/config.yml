@@ -126,7 +126,8 @@ jobs:
           no_output_timeout: 75m
           command: |
             set -euo pipefail
-            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>-candidate"
+            RELEASE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
+            IMAGE_TAG="${RELEASE_TAG}-candidate"
             JOB="opensips-image-${CIRCLE_BUILD_NUM}"
             export IMAGE_TAG JOB
 
@@ -168,7 +169,7 @@ jobs:
                         - --destination=zot.registry.svc.cluster.local:5000/ehws/opensips:${IMAGE_TAG}
                         - --build-arg=OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>
                         - --build-arg=EHWS_BUILD=<< pipeline.number >>
-                        - --build-arg=OPENSIPS_VERSION=${IMAGE_TAG}
+                        - --build-arg=OPENSIPS_VERSION=${RELEASE_TAG}
                         - --cache=false
                         - --insecure
                         - --log-format=text
@@ -228,6 +229,7 @@ jobs:
           command: |
             set -euo pipefail
             IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>-candidate"
+            RELEASE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
             RELEASE="opensips-validation-<< pipeline.number >>"
             JOB="${RELEASE}-config-check"
             VALUES=/tmp/opensips-values.json
@@ -235,6 +237,7 @@ jobs:
             kubectl -n opensips get helmrelease opensips -o jsonpath='{.spec.values}' > "${VALUES}"
             helm template "${RELEASE}" . --namespace opensips -f "${VALUES}" \
               --set-string opensips.image.tag="${IMAGE_TAG}" \
+              --set-string validation.expectedVersion="${RELEASE_TAG}" \
               --set-string mariadb.auth.existingSecret=opensips-opensips-mariadb \
               --set validation.enabled=true \
               --show-only templates/configmap.yaml \
