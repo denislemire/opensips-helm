@@ -126,7 +126,7 @@ jobs:
           no_output_timeout: 75m
           command: |
             set -euo pipefail
-            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.${CIRCLE_PIPELINE_NUMBER}"
+            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
             JOB="opensips-image-${CIRCLE_BUILD_NUM}"
             export IMAGE_TAG JOB
 
@@ -167,7 +167,7 @@ jobs:
                         - --context=git://github.com/denislemire/opensips-helm.git#refs/heads/${CIRCLE_BRANCH}#${CIRCLE_SHA1}
                         - --destination=zot.registry.svc.cluster.local:5000/ehws/opensips:${IMAGE_TAG}
                         - --build-arg=OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>
-                        - --build-arg=EHWS_BUILD=${CIRCLE_PIPELINE_NUMBER}
+                        - --build-arg=EHWS_BUILD=<< pipeline.number >>
                         - --build-arg=OPENSIPS_VERSION=${IMAGE_TAG}
                         - --cache=false
                         - --insecure
@@ -227,8 +227,8 @@ jobs:
           name: Validate rendered config with the built image
           command: |
             set -euo pipefail
-            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.${CIRCLE_PIPELINE_NUMBER}"
-            RELEASE="opensips-validation-${CIRCLE_PIPELINE_NUMBER}"
+            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
+            RELEASE="opensips-validation-<< pipeline.number >>"
             JOB="${RELEASE}-config-check"
             VALUES=/tmp/opensips-values.json
 
