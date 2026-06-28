@@ -14,8 +14,11 @@ if [[ ! -f "${template_dir}/opensips.cfg" ]]; then
   exit 1
 fi
 
-RTPENGINE_SOCKETS="$(/usr/local/bin/discover-rtpengine.sh)"
-export RTPENGINE_SOCKETS
+# Allow CI to inject RTPENGINE_SOCKETS directly and skip DNS discovery
+if [[ -z "${RTPENGINE_SOCKETS:-}" ]]; then
+  RTPENGINE_SOCKETS="$(/usr/local/bin/discover-rtpengine.sh)"
+  export RTPENGINE_SOCKETS
+fi
 
 if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
   db_user_enc=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$MARIADB_USER")
@@ -56,10 +59,6 @@ append_fragment "${template_dir}/peers-asterisk.cfg"
 append_fragment "${template_dir}/registration.cfg"
 append_fragment "${template_dir}/extra-routes.cfg"
 
-if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
-  /usr/local/bin/seed-db.sh
-fi
-
 if [[ "${REGISTRATION_ENABLED:-false}" == "true" && -n "${REGISTRATION_USERNAME:-}" && -n "${REGISTRATION_PASSWORD:-}" ]]; then
   reg_domain="${REGISTRATION_DOMAIN:-${REGISTRATION_REGISTRAR}}"
   uac_cred="${REGISTRATION_USERNAME}:${reg_domain}:${REGISTRATION_PASSWORD}"
@@ -69,4 +68,16 @@ else
   sed -i '/@@UAC_AUTH_CREDENTIAL@@/d' "${run_cfg}"
 fi
 
-exec /usr/local/sbin/opensips -f "${run_cfg}" -F
+# OPENSIPS_CHECK_ONLY=true: validate config and exit — used by CI
+if [[ "${OPENSIPS_CHECK_ONLY:-false}" == "true" ]]; then
+  if [[ -n "${OPENSIPS_EXPECTED_VERSION:-}" ]]; then
+    /usr/sbin/opensips -V | grep -Fqx "version: opensips ${OPENSIPS_EXPECTED_VERSION} (x86_64/linux)"
+  fi
+  exec /usr/sbin/opensips -C -f "${run_cfg}"
+fi
+
+if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
+  /usr/local/bin/seed-db.sh
+fi
+
+exec /usr/sbin/opensips -f "${run_cfg}" -F

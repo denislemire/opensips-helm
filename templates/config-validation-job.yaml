@@ -1,0 +1,77 @@
+{{- if .Values.validation.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "opensips.fullname" . }}-config-check
+  labels:
+    {{- include "opensips.labels" . | nindent 4 }}
+    app.kubernetes.io/component: config-validation
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        {{- include "opensips.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: config-validation
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: opensips-check
+          image: {{ include "opensips.image" . | quote }}
+          imagePullPolicy: Always
+          env:
+            - name: OPENSIPS_CHECK_ONLY
+              value: "true"
+            - name: OPENSIPS_EXPECTED_VERSION
+              value: {{ default .Values.opensips.image.tag .Values.validation.expectedVersion | quote }}
+            - name: RTPENGINE_SOCKETS
+              value: "udp:127.0.0.1:2223"
+            - name: REGISTRATION_ENABLED
+              value: {{ .Values.registration.enabled | quote }}
+            - name: TLS_ENABLED
+              value: {{ include "opensips.tlsEnabled" . | quote }}
+            - name: PROMETHEUS_ENABLED
+              value: {{ include "opensips.prometheusEnabled" . | quote }}
+            - name: MARIADB_ENABLED
+              value: {{ .Values.mariadb.enabled | quote }}
+            {{- if .Values.mariadb.enabled }}
+            - name: MARIADB_HOST
+              value: {{ include "opensips.mariadbFullname" . | quote }}
+            - name: MARIADB_DATABASE
+              value: {{ .Values.mariadb.auth.database | quote }}
+            - name: MARIADB_USER
+              value: {{ .Values.mariadb.auth.username | quote }}
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensips.mariadbSecretName" . }}
+                  key: {{ .Values.mariadb.auth.passwordKey }}
+            {{- end }}
+            {{- if .Values.registration.enabled }}
+            - name: REGISTRATION_REGISTRAR
+              value: {{ .Values.registration.registrar | quote }}
+            - name: REGISTRATION_USERNAME
+              value: {{ .Values.registration.username | quote }}
+            - name: REGISTRATION_DOMAIN
+              value: {{ default .Values.registration.registrar .Values.registration.domain | quote }}
+            - name: REGISTRATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-registration" (include "opensips.fullname" .)) .Values.registration.existingSecret }}
+                  key: {{ .Values.registration.passwordKey }}
+            {{- end }}
+          volumeMounts:
+            - name: config-template
+              mountPath: /etc/opensips/template
+              readOnly: true
+      volumes:
+        - name: config-template
+          configMap:
+            name: {{ include "opensips.configMapName" . }}
+{{- end }}

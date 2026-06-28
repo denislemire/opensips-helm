@@ -1,0 +1,29 @@
+version: '2.1'
+
+# Setup phase: continue only when a change can affect the OpenSIPS image,
+# generated runtime configuration, or its validation contract.
+#
+# Comparing each branch with its own previous revision has two useful effects:
+# - feature branches build and validate only commits that touch relevant paths;
+# - the merge commit on master sees the merged changes and runs the release
+#   workflow, which promotes and deploys the authoritative master artifact.
+setup: true
+
+orbs:
+  path-filtering: circleci/path-filtering@2
+
+workflows:
+  detect-opensips-changes:
+    jobs:
+      - path-filtering/filter:
+          name: detect-opensips-changes
+          base-revision: << pipeline.git.branch >>
+          config-path: .circleci/continue_config.yml
+          circleci_domain: circle.ehws.generic.business
+          mapping: |
+            ^\.circleci/.* run_image_pipeline true
+            ^docker/.* run_image_pipeline true
+            ^config/.* run_image_pipeline true
+            ^templates/.* run_image_pipeline true
+            ^Chart\.yaml$ run_image_pipeline true
+            ^values\.yaml$ run_image_pipeline true
