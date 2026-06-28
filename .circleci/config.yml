@@ -172,29 +172,17 @@ commands:
               | tar -xzf - -C /tmp crane
 
 jobs:
-  prepare-context:
-    executor: default
-    steps:
-      - checkout
-      - persist_to_workspace:
-          root: .
-          paths:
-            - .
-
   build-image:
     executor: kaniko
     steps:
-      - attach_workspace:
-          at: /workspace
       - run:
           name: Build image with isolated Kaniko
           no_output_timeout: 75m
           command: |
             IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.parameters.ehws_build >>"
-            cp -a /workspace /tmp/build-context
             /kaniko/executor \
-              --dockerfile=/tmp/build-context/docker/Dockerfile \
-              --context=dir:///tmp/build-context \
+              --dockerfile=docker/Dockerfile \
+              --context="git://github.com/denislemire/opensips-helm.git#refs/heads/${CIRCLE_BRANCH}#${CIRCLE_SHA1}" \
               --destination="registry.ehws.generic.business/ehws/opensips:${IMAGE_TAG}" \
               --no-push \
               --tar-path=/workspace/opensips-image.tar \
@@ -257,10 +245,7 @@ workflows:
   build-opensips:
     when: << pipeline.parameters.run_build >>
     jobs:
-      - prepare-context
-      - build-image:
-          requires:
-            - prepare-context
+      - build-image
       - push-image:
           context: ehws-authentik-oidc
           requires:
