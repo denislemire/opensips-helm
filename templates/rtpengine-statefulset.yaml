@@ -7,7 +7,7 @@ metadata:
     {{- include "opensips.labels" . | nindent 4 }}
     app.kubernetes.io/component: rtpengine
 spec:
-  serviceName: {{ include "opensips.fullname" . }}-rtpengine-headless
+  serviceName: rtpengine-headless
   replicas: {{ .Values.rtpengine.replicaCount }}
   podManagementPolicy: Parallel
   selector:
@@ -72,7 +72,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "opensips.fullname" . }}-rtpengine-headless
+  name: rtpengine-headless
   labels:
     {{- include "opensips.labels" . | nindent 4 }}
     app.kubernetes.io/component: rtpengine
@@ -90,7 +90,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "opensips.fullname" . }}-rtpengine
+  name: rtpengine
   labels:
     {{- include "opensips.labels" . | nindent 4 }}
     app.kubernetes.io/component: rtpengine
