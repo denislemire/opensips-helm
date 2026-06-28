@@ -106,7 +106,7 @@ commands:
           command: |
             set -euo pipefail
             # Requires: blueprint-zot-ci-m2m applied + Zot bearer auth (ehws-infra PR #552)
-            CIRCLE_ASSERTION="${CIRCLE_OIDC_TOKEN_V2}" python3 - <<'PY'
+            CIRCLE_ASSERTION="${CIRCLE_OIDC_TOKEN_V2}" python3 - \<<'PY'
             import base64, json, os
 
             payload = os.environ["CIRCLE_ASSERTION"].split(".")[1]
