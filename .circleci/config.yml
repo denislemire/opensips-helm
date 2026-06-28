@@ -106,9 +106,18 @@ commands:
           command: |
             set -euo pipefail
             # Requires: blueprint-zot-ci-m2m applied + Zot bearer auth (ehws-infra PR #552)
+            CIRCLE_ASSERTION="${CIRCLE_OIDC_TOKEN_V2}" python3 - <<'PY'
+            import base64, json, os
+
+            payload = os.environ["CIRCLE_ASSERTION"].split(".")[1]
+            payload += "=" * (-len(payload) % 4)
+            claims = json.loads(base64.urlsafe_b64decode(payload))
+            safe_keys = ("iss", "aud", "sub", "iat", "exp", "oidc.circleci.com/project-id", "oidc.circleci.com/context-ids")
+            print("CircleCI assertion claims:", json.dumps({key: claims.get(key) for key in safe_keys}, sort_keys=True))
+            PY
             bearer="$(
               TOKEN_RESPONSE="$(
-                curl -fsSL -X POST "https://auth.ehws.generic.business/application/o/token/" \
+                curl -sS -X POST "https://auth.ehws.generic.business/application/o/token/" \
                   -H 'Content-Type: application/x-www-form-urlencoded' \
                   --data-urlencode 'grant_type=client_credentials' \
                   --data-urlencode 'scope=openid profile' \
@@ -117,8 +126,10 @@ commands:
                   --data-urlencode "client_assertion=${CIRCLE_OIDC_TOKEN_V2}"
               )" python3 -c "
             import json, os, sys
-            token = json.loads(os.environ['TOKEN_RESPONSE']).get('access_token', '')
+            response = json.loads(os.environ['TOKEN_RESPONSE'])
+            token = response.get('access_token', '')
             if not token:
+                print('Authentik token error:', json.dumps(response), file=sys.stderr)
                 sys.exit(1)
             print(token, end='')
             ")"
