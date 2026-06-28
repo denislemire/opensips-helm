@@ -357,8 +357,8 @@ jobs:
             mkdir -p /tmp/charts
             helm package . --destination /tmp/charts/
             helm push "/tmp/charts/opensips-${CHART_VERSION}.tgz" \
-              "oci://${ZOT_REGISTRY}/ehws/charts"
-            echo "Pushed: oci://${ZOT_REGISTRY}/ehws/charts/opensips:${CHART_VERSION}"
+              "oci://${ZOT_REGISTRY}"
+            echo "Pushed: oci://${ZOT_REGISTRY}/opensips:${CHART_VERSION}"
 
 workflows:
   build-opensips:
