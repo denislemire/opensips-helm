@@ -108,7 +108,7 @@ commands:
             # Requires: blueprint-zot-ci-m2m applied + Zot bearer auth (ehws-infra PR #552)
             bearer="$(
               TOKEN_RESPONSE="$(
-                curl -fsSL -X POST "https://auth.ehws.generic.business/application/o/zot-ci/token/" \
+                curl -fsSL -X POST "https://auth.ehws.generic.business/application/o/token/" \
                   -H 'Content-Type: application/x-www-form-urlencoded' \
                   --data-urlencode 'grant_type=client_credentials' \
                   --data-urlencode 'scope=openid profile' \
