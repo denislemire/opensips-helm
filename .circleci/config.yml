@@ -164,9 +164,11 @@ jobs:
     executor: default
     steps:
       - checkout
-      - install_kubectl
       - install_crane_kaniko
-      - oidc_kubeconfig
+      # A JWT client assertion is single-use. Do not call oidc_kubeconfig in this
+      # job before oidc_zot_token: Authentik rejects the second exchange as a
+      # replay. This job does not need cluster access; publish-chart runs as a
+      # separate job and receives its own CIRCLE_OIDC_TOKEN_V2.
       - oidc_zot_token
       - run:
           name: Set image tag and patch Dockerfile version string
