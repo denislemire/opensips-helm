@@ -54,6 +54,11 @@ executors:
     docker:
       - image: cimg/base:2026.06
     resource_class: denislemire/ehws
+  kaniko:
+    docker:
+      - image: gcr.io/kaniko-project/executor:v1.23.2-debug
+    resource_class: denislemire/ehws
+    shell: /busybox/sh -eo pipefail
 
 commands:
   oidc_kubeconfig:
@@ -155,66 +160,67 @@ commands:
             curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \
               | bash
 
-  install_crane_kaniko:
-    description: "Install crane and extract the kaniko executor from its image"
+  install_crane:
+    description: "Install crane"
     steps:
       - run:
-          name: Install crane + kaniko executor
+          name: Install crane
           command: |
             set -euo pipefail
             curl -fsSL \
               https://github.com/google/go-containerregistry/releases/download/v0.20.6/go-containerregistry_Linux_x86_64.tar.gz \
               | tar -xzf - -C /tmp crane
-            # kaniko publishes as a container image only; extract the binary via crane export
-            /tmp/crane export gcr.io/kaniko-project/executor:v1.23.2 - \
-              | tar -xOf - kaniko/executor > /tmp/kaniko-executor
-            chmod +x /tmp/kaniko-executor
 
 jobs:
-  build-image:
+  prepare-context:
     executor: default
     steps:
       - checkout
-      - install_crane_kaniko
-      # A JWT client assertion is single-use. Do not call oidc_kubeconfig in this
-      # job before oidc_zot_token: Authentik rejects the second exchange as a
-      # replay. This job does not need cluster access; publish-chart runs as a
-      # separate job and receives its own CIRCLE_OIDC_TOKEN_V2.
-      - oidc_zot_token
-      - run:
-          name: Set image tag and patch Dockerfile version string
-          command: |
-            set -euo pipefail
-            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws-<< pipeline.parameters.ehws_build >>"
-            echo "export IMAGE_TAG=${IMAGE_TAG}" >> "$BASH_ENV"
-            echo "Building: zot.registry.svc.cluster.local:5000/ehws/opensips:${IMAGE_TAG}"
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
 
-            # Add ARG EHWS_BUILD so the make step can receive it
-            sed -i '/^ARG OPENSIPS_GIT_REF/a ARG EHWS_BUILD=1' docker/Dockerfile
-            # Insert EXTRA_VER patch after WORKDIR /src/opensips.
-            # printf keeps ${EHWS_BUILD} literal so Docker expands it from ARG.
-            printf 'RUN sed -i "s|^EXTRA_VER.*\\$|EXTRA_VER ?= -ehws-${EHWS_BUILD}|" Makefile.defs\n' \
-              > /tmp/ver.txt
-            sed -i '/^WORKDIR \/src\/opensips$/r /tmp/ver.txt' docker/Dockerfile
+  build-image:
+    executor: kaniko
+    steps:
+      - attach_workspace:
+          at: /workspace
       - run:
-          name: Build image with Kaniko (no push)
+          name: Build image with isolated Kaniko
           no_output_timeout: 75m
           command: |
-            sudo /tmp/kaniko-executor \
-              --dockerfile=docker/Dockerfile \
-              --context="$(pwd)" \
+            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.parameters.ehws_build >>"
+            /kaniko/executor \
+              --dockerfile=/workspace/docker/Dockerfile \
+              --context=dir:///workspace \
+              --destination="registry.ehws.generic.business/ehws/opensips:${IMAGE_TAG}" \
               --no-push \
-              --tar-path=/tmp/opensips-image.tar \
+              --tar-path=/workspace/opensips-image.tar \
               --build-arg="OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>" \
               --build-arg="EHWS_BUILD=<< pipeline.parameters.ehws_build >>" \
               --build-arg="OPENSIPS_VERSION=${IMAGE_TAG}" \
               --cache=false \
               --log-format=text
+      - persist_to_workspace:
+          root: /workspace
+          paths:
+            - opensips-image.tar
+
+  push-image:
+    executor: default
+    steps:
+      - attach_workspace:
+          at: /workspace
+      - install_crane
+      - oidc_zot_token
       - run:
-          name: Push image via crane (OIDC bearer token)
+          name: Push image via Crane with OIDC bearer token
           command: |
+            set -euo pipefail
+            IMAGE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.parameters.ehws_build >>"
             DEST="zot.registry.svc.cluster.local:5000/ehws/opensips:${IMAGE_TAG}"
-            /tmp/crane push /tmp/opensips-image.tar "${DEST}" \
+            /tmp/crane push /workspace/opensips-image.tar "${DEST}" \
               --registry-token="$(cat /tmp/zot-bearer-token)" \
               --insecure
             echo "Pushed: ${DEST}"
@@ -250,9 +256,15 @@ workflows:
   build-opensips:
     when: << pipeline.parameters.run_build >>
     jobs:
+      - prepare-context
       - build-image:
-          context: ehws-authentik-oidc
-      - publish-chart:
+          requires:
+            - prepare-context
+      - push-image:
           context: ehws-authentik-oidc
           requires:
             - build-image
+      - publish-chart:
+          context: ehws-authentik-oidc
+          requires:
+            - push-image

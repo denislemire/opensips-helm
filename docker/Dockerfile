@@ -3,6 +3,7 @@
 FROM debian:bookworm-slim AS builder
 
 ARG OPENSIPS_GIT_REF=4.0
+ARG EHWS_BUILD=1
 ARG OPENSIPS_VERSION=0.1.0
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -29,6 +30,7 @@ RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" --recurse-submodules \
     https://github.com/OpenSIPS/opensips.git opensips
 
 WORKDIR /src/opensips
+RUN sed -i "s|^EXTRA_VER.*$|EXTRA_VER ?= -ehws-${EHWS_BUILD}|" Makefile.defs
 ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar permissions"
 RUN make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
     all && make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
