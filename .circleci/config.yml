@@ -153,9 +153,9 @@ jobs:
                       args:
                         - |
                           set -eu
-                          AUTH=$(printf 'admin:%s' "$(cat /zot-auth/password)" | base64 | tr -d '\n')
+                          AUTH=\$(printf 'admin:%s' "\$(cat /zot-auth/password)" | base64 | tr -d '\n')
                           printf '{"auths":{"zot.registry.svc.cluster.local:5000":{"auth":"%s"}}}' \
-                            "$AUTH" > /kaniko/.docker/config.json
+                            "\$AUTH" > /kaniko/.docker/config.json
                       volumeMounts:
                         - name: zot-auth
                           mountPath: /zot-auth
