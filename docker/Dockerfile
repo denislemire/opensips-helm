@@ -31,6 +31,7 @@ RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" \
 
 WORKDIR /src/opensips
 ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar permissions"
+
 RUN make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
     OPENSIPS_RELEASE="${OPENSIPS_VERSION}" all \
     && make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \

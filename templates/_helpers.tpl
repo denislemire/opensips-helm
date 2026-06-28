@@ -6,7 +6,7 @@
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
-{{- $name := include "opensips.name" . -}}
+{{- $name := default .Chart.Name .Values.nameOverride -}}
 {{- if contains $name .Release.Name -}}
 {{- .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
@@ -57,7 +57,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- define "opensips.rtpengineStaticSockets" -}}
-{{- $root := . -}}
 {{- $host := include "opensips.rtpengineHeadlessHost" . -}}
 {{- $name := include "opensips.rtpengineStatefulSetName" . -}}
 {{- $port := int .Values.rtpengine.service.controlPort -}}
@@ -112,5 +111,5 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- define "opensips.mariadbHost" -}}
-{{- printf "%s.%s.svc.cluster.local" (include "opensips.mariadbFullname" .) .Release.Namespace -}}
+{{- printf "mariadb.%s.svc.cluster.local" .Release.Namespace -}}
 {{- end -}}
