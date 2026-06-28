@@ -26,7 +26,7 @@ RUN rm -rf /etc/apt/sources.list.d/* \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
-RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" --recurse-submodules \
+RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" \
     https://github.com/OpenSIPS/opensips.git opensips
 
 WORKDIR /src/opensips
