@@ -381,16 +381,16 @@ jobs:
                             default-libmysqlclient-dev libjson-c-dev libevent-dev \
                             libxmlrpc-core-c3-dev libperl-dev libmemcached-dev \
                             libmicrohttpd-dev libuuid1 uuid-dev
-                          git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" \
+                          git clone --depth 1 --branch "\${OPENSIPS_GIT_REF}" \
                             https://github.com/OpenSIPS/opensips.git /src/opensips
                           git clone --depth 1 https://github.com/zorgnax/libtap.git \
                             /src/opensips/lib/libtap
                           make -C /src/opensips/lib/libtap CFLAGS="-O1 -fPIC" libtap.a
                           cd /src/opensips
                           make Makefile.conf
-                          printf 'DEFS+= -I%s/lib/libtap\nLIBS+= -L%s/lib/libtap\n' \
-                            "$(pwd)" "$(pwd)" >> Makefile.conf
-                          make -j"$(nproc)" DEFS_EXTRA_OPTS="-DUNIT_TESTS -fPIC" opensips
+                          printf 'DEFS+= -I/src/opensips/lib/libtap\nLIBS+= -L/src/opensips/lib/libtap\n' \
+                            >> Makefile.conf
+                          make -j"\$(nproc)" DEFS_EXTRA_OPTS="-DUNIT_TESTS -fPIC" opensips
                           ./opensips -dd -T core -w . -a HP_MALLOC
                       resources:
                         requests: {cpu: "2", memory: 2Gi}
