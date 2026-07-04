@@ -20,9 +20,27 @@ if [[ -z "${RTPENGINE_SOCKETS:-}" ]]; then
   export RTPENGINE_SOCKETS
 fi
 
+# RFC 3986 percent-encoding (no python3 dependency, keeps the image slim).
+# Operates byte-wise under LC_ALL=C so multi-byte UTF-8 chars encode correctly;
+# the `& 0xFF` guards against bash treating high-bit bytes as negative chars.
+urlencode() {
+  local LC_ALL=C string="$1" out= i c byte
+  for (( i = 0; i < ${#string}; i++ )); do
+    c="${string:i:1}"
+    case "$c" in
+      [a-zA-Z0-9.~_-]) out+="$c" ;;
+      *)
+        printf -v byte '%d' "'$c"
+        out+=$(printf '%%%02X' $(( byte & 0xFF )))
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
 if [[ "${MARIADB_ENABLED:-false}" == "true" ]]; then
-  db_user_enc=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$MARIADB_USER")
-  db_pass_enc=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$MARIADB_PASSWORD")
+  db_user_enc=$(urlencode "$MARIADB_USER")
+  db_pass_enc=$(urlencode "$MARIADB_PASSWORD")
   export OPENSIPS_DB_URL="mysql://${db_user_enc}:${db_pass_enc}@${MARIADB_HOST}/${MARIADB_DATABASE}"
 fi
 
