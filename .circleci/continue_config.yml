@@ -329,6 +329,108 @@ jobs:
             [[ "${deployed}" == "registry.ehws.generic.business/ehws/opensips:${EXPECTED}" ]]
             kubectl -n opensips get pods -o wide
 
+  unit-test:
+    executor: default
+    steps:
+      - install_kubectl
+      - oidc_kubeconfig
+      - run:
+          name: Build OpenSIPS core with unit tests and capture TAP output
+          no_output_timeout: 20m
+          command: |
+            set -euo pipefail
+            JOB="opensips-unit-test-${CIRCLE_BUILD_NUM}"
+            export JOB
+            cleanup() {
+              [[ -n "${LOG_PID:-}" ]] && kill "${LOG_PID}" 2>/dev/null || true
+              kubectl -n opensips delete job "${JOB}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+            }
+            trap cleanup EXIT
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+
+            kubectl apply -f - \<<YAML
+            apiVersion: batch/v1
+            kind: Job
+            metadata:
+              name: ${JOB}
+              namespace: opensips
+            spec:
+              ttlSecondsAfterFinished: 3600
+              backoffLimit: 0
+              template:
+                spec:
+                  automountServiceAccountToken: false
+                  restartPolicy: Never
+                  containers:
+                    - name: unit-tests
+                      image: debian:bookworm-slim
+                      env:
+                        - name: OPENSIPS_GIT_REF
+                          value: "<< pipeline.parameters.opensips_version >>"
+                        - name: DEBIAN_FRONTEND
+                          value: noninteractive
+                      command: ["/bin/sh", "-c"]
+                      args:
+                        - |
+                          set -eu
+                          apt-get update && apt-get install -y --no-install-recommends \
+                            ca-certificates git build-essential bison flex pkg-config \
+                            libssl-dev libncurses-dev libxml2-dev libpcre3-dev \
+                            libcurl4-openssl-dev libhiredis-dev libmariadb-dev libmariadb-dev-compat \
+                            default-libmysqlclient-dev libjson-c-dev libevent-dev \
+                            libxmlrpc-core-c3-dev libperl-dev libmemcached-dev \
+                            libmicrohttpd-dev libuuid1 uuid-dev
+                          git clone --depth 1 --branch "\${OPENSIPS_GIT_REF}" \
+                            https://github.com/OpenSIPS/opensips.git /src/opensips
+                          git clone --depth 1 https://github.com/zorgnax/libtap.git \
+                            /src/opensips/lib/libtap
+                          make -C /src/opensips/lib/libtap CFLAGS="-O1 -fPIC" libtap.a
+                          cd /src/opensips
+                          make Makefile.conf
+                          printf 'DEFS+= -I/src/opensips/lib/libtap\nLIBS+= -L/src/opensips/lib/libtap\n' \
+                            >> Makefile.conf
+                          make -j"\$(nproc)" DEFS_EXTRA_OPTS="-DUNIT_TESTS -fPIC" opensips
+                          ./opensips -dd -T core -w . -a HP_MALLOC
+                      resources:
+                        requests: {cpu: "2", memory: 2Gi}
+                        limits: {cpu: "4", memory: 4Gi}
+            YAML
+
+            kubectl -n opensips wait pod -l "job-name=${JOB}" \
+              --for=condition=Ready --timeout=5m
+            kubectl -n opensips logs -f "job/${JOB}" | tee /tmp/unit-tests.tap &
+            LOG_PID=$!
+
+            for attempt in $(seq 1 180); do
+              complete=$(kubectl -n opensips get job "${JOB}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')
+              failed=$(kubectl -n opensips get job "${JOB}" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}')
+              [[ "${complete}" == "True" || "${failed}" == "True" ]] && break
+              (( attempt % 6 == 0 )) && echo "Unit tests still running (${attempt}0s)..."
+              sleep 10
+            done
+            wait "${LOG_PID}" || true
+
+            if [[ "${complete}" != "True" ]]; then
+              echo "Unit test job did not complete successfully" >&2
+              exit 1
+            fi
+      - run:
+          name: Convert TAP output to JUnit XML
+          when: always
+          command: |
+            set -euo pipefail
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends perl libtap-formatter-junit-perl
+            mkdir -p /tmp/test-results
+            cp /tmp/unit-tests.tap /tmp/test-results/unit-tests.tap
+            prove --formatter TAP::Formatter::JUnit --merge \
+              --exec cat /tmp/unit-tests.tap > /tmp/test-results/junit.xml
+      - store_test_results:
+          path: /tmp/test-results
+      - store_artifacts:
+          path: /tmp/test-results
+
   publish-chart:
     executor: default
     steps:
@@ -370,6 +472,8 @@ workflows:
           context: ehws-authentik-oidc
           requires:
             - build-image
+      - unit-test:
+          context: ehws-authentik-oidc
 
   release-from-master:
     when:
@@ -396,3 +500,5 @@ workflows:
           requires:
             - publish-chart
             - promote-image
+      - unit-test:
+          context: ehws-authentik-oidc
