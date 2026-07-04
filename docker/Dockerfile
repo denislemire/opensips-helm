@@ -32,11 +32,19 @@ RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" \
 WORKDIR /src/opensips
 ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar permissions"
 
-RUN make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
+# include_modules= is additive to OpenSIPS's full default module set, not a
+# restriction (see upstream INSTALL: "compile all default modules and include
+# uri_radius"). Overriding modules= on the command line is the only way to
+# limit the build, since command-line variables take precedence over the
+# Makefile's own modules= assignment. Without this, `make install` builds and
+# ships all ~190 modules in the tree instead of just the ~20 our config loads.
+RUN MODULE_PATHS="$(for m in ${OPENSIPS_MODULES}; do printf 'modules/%s ' "$m"; done)" \
+    && make -j"$(nproc)" prefix=/usr LIBDIR=lib modules="${MODULE_PATHS}" \
     OPENSIPS_RELEASE="${OPENSIPS_VERSION}" all \
-    && make -j"$(nproc)" prefix=/usr LIBDIR=lib include_modules="${OPENSIPS_MODULES}" \
+    && make -j"$(nproc)" prefix=/usr LIBDIR=lib modules="${MODULE_PATHS}" \
     OPENSIPS_RELEASE="${OPENSIPS_VERSION}" \
-    install
+    install \
+    && strip --strip-unneeded /usr/sbin/opensips /usr/lib/opensips/modules/*.so
 
 FROM debian:bookworm-slim
 
@@ -61,7 +69,7 @@ RUN rm -rf /etc/apt/sources.list.d/* \
       -o Dpkg::Options::=--force-confnew --no-install-recommends \
     ca-certificates libssl3 libxml2 libpcre3 libcurl4 libhiredis0.14 \
     libmariadb3 libjson-c5 libevent-2.1-7 libxmlrpc-core-c3 libmemcached11 \
-    libmicrohttpd12 libuuid1 dnsutils iputils-ping mariadb-client python3-minimal \
+    libmicrohttpd12 libuuid1 mariadb-client-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/sbin/opensips /usr/sbin/opensips
