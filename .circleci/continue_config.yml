@@ -5,15 +5,21 @@ version: '2.1'
 # Relevant feature-branch commits build and validate a candidate. Relevant
 # master commits build, validate, publish, promote, and verify Flux deployment.
 #
-# ┌─ OIDC flow ──────────────────────────────────────────────────────────────────┐
+# ┌─ Image build (machine) ──────────────────────────────────────────────────────┐
+# │  debian-trixie (debian-13:current / trixie-medium) runs docker build/push.  │
+# │  Registry login uses onepassword/secrets + ehws-1password-secrets context.  │
+# │  Same pattern as apsystems-prometheus-exporter and filehash-offload.        │
+# └──────────────────────────────────────────────────────────────────────────────┘
+#
+# ┌─ OIDC flow (cluster jobs) ───────────────────────────────────────────────────┐
 # │  CIRCLE_OIDC_TOKEN_V2 is auto-injected for jobs in the ehws-authentik-oidc  │
 # │  context.  It is a short-lived JWT signed by CircleCI Server.               │
 # │                                                                              │
 # │  kubernetes-cluster  →  kubeconfig (cluster-reader + registry-push-auth)   │
-# │    USE FOR: short-lived Kubernetes access and scoped Job orchestration      │
+# │    USE FOR: validate / promote / verify / unit-test Job orchestration       │
 # │                                                                              │
-# │  Registry writes happen inside short-lived Kubernetes Jobs. Those pods      │
-# │  mount registry-push-auth; the fixed credential never enters CircleCI.      │
+# │  Promote still copies tags via an in-cluster crane Job that mounts          │
+# │  registry-push-auth; that credential never enters CircleCI.                 │
 # │  Direct zot-ci bearer auth was retired because it broke Zot OpenID login.   │
 # └──────────────────────────────────────────────────────────────────────────────┘
 #
@@ -22,6 +28,12 @@ version: '2.1'
 #   AUTHENTIK_CLIENT_ID      — kubernetes-cluster (for kubectl OIDC)
 #   KUBE_API_SERVER          — K3s API server URL
 #   KUBE_CA_B64              — base64-encoded cluster CA certificate
+#
+# Context: ehws-1password-secrets
+#   OP_SERVICE_ACCOUNT_TOKEN — 1Password service account for Zot htpasswd refs
+
+orbs:
+  onepassword: onepassword/secrets@1
 
 parameters:
   opensips_version:
@@ -36,6 +48,13 @@ executors:
     docker:
       - image: cimg/base:2026.06
     resource_class: denislemire/ehws
+
+  # KubeVirt Debian 13 (trixie) machine image — real Docker daemon on the VM.
+  # Bake: denislemire/circleci-debian; class display name "Trixie Medium".
+  debian-trixie:
+    machine:
+      image: debian-13:current
+    resource_class: trixie-medium
 
 commands:
   oidc_kubeconfig:
@@ -103,111 +122,54 @@ commands:
 
 jobs:
   build-image:
-    executor: default
+    executor: debian-trixie
+    environment:
+      ZOT_USERNAME: op://EhWS Secrets/Registry EHWS - Zot htpasswd/username
+      ZOT_PASSWORD: op://EhWS Secrets/Registry EHWS - Zot htpasswd/password
     steps:
-      - install_kubectl
-      - oidc_kubeconfig
+      - checkout
       - run:
-          name: Build and push image with in-cluster Kaniko
-          no_output_timeout: 75m
+          name: Install unzip (required by onepassword/install-cli)
           command: |
             set -euo pipefail
+            sudo apt-get update
+            sudo apt-get install -y unzip
+      - onepassword/install-cli:
+          # Orb default is 2.7.1; service accounts need CLI >= 2.18.0.
+          version: "2.34.1"
+          path: /usr/local/bin
+      - run:
+          name: Verify op CLI
+          command: |
+            set -euo pipefail
+            command -v op
+            op --version
+            echo 'export PATH="/usr/local/bin:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: Build and push candidate image to Zot
+          no_output_timeout: 75m
+          shell: op run -- /bin/bash
+          command: |
+            set -euo pipefail
+
+            REGISTRY="registry.ehws.generic.business"
+            IMAGE="${REGISTRY}/ehws/opensips"
             RELEASE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
             IMAGE_TAG="${RELEASE_TAG}-candidate"
-            JOB="opensips-image-${CIRCLE_BUILD_NUM}"
-            export IMAGE_TAG JOB
-            cleanup() {
-              [[ -n "${LOG_PID:-}" ]] && kill "${LOG_PID}" 2>/dev/null || true
-              kubectl -n opensips delete job "${JOB}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
-            }
-            trap cleanup EXIT
-            trap 'exit 130' INT
-            trap 'exit 143' TERM
 
-            kubectl apply -f - \<<YAML
-            apiVersion: batch/v1
-            kind: Job
-            metadata:
-              name: ${JOB}
-              namespace: opensips
-            spec:
-              ttlSecondsAfterFinished: 3600
-              backoffLimit: 0
-              template:
-                spec:
-                  automountServiceAccountToken: false
-                  restartPolicy: Never
-                  initContainers:
-                    - name: docker-config
-                      image: alpine:3.22
-                      command: ["/bin/sh", "-c"]
-                      args:
-                        - |
-                          set -eu
-                          AUTH=\$(printf 'admin:%s' "\$(cat /zot-auth/password)" | base64 | tr -d '\n')
-                          printf '{"auths":{"zot.registry.svc.cluster.local:5000":{"auth":"%s"}}}' \
-                            "\$AUTH" > /kaniko/.docker/config.json
-                      volumeMounts:
-                        - name: zot-auth
-                          mountPath: /zot-auth
-                          readOnly: true
-                        - name: docker-config
-                          mountPath: /kaniko/.docker
-                  containers:
-                    - name: kaniko
-                      image: gcr.io/kaniko-project/executor:v1.23.2
-                      args:
-                        - --dockerfile=docker/Dockerfile
-                        - --context=git://github.com/denislemire/opensips-helm.git#refs/heads/${CIRCLE_BRANCH}#${CIRCLE_SHA1}
-                        - --destination=zot.registry.svc.cluster.local:5000/ehws/opensips:${IMAGE_TAG}
-                        - --build-arg=OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>
-                        - --build-arg=EHWS_BUILD=<< pipeline.number >>
-                        - --build-arg=OPENSIPS_VERSION=${RELEASE_TAG}
-                        - --cache=false
-                        - --insecure
-                        - --log-format=text
-                      env:
-                        - name: DOCKER_CONFIG
-                          value: /kaniko/.docker
-                      volumeMounts:
-                        - name: docker-config
-                          mountPath: /kaniko/.docker
-                          readOnly: true
-                      resources:
-                        requests: {cpu: "2", memory: 4Gi}
-                        limits: {cpu: "4", memory: 8Gi}
-                  volumes:
-                    - name: docker-config
-                      emptyDir: {}
-                    - name: zot-auth
-                      secret:
-                        secretName: registry-push-auth
-            YAML
+            printf '%s' "${ZOT_PASSWORD}" \
+              | docker login "${REGISTRY}" -u "${ZOT_USERNAME}" --password-stdin
 
-            kubectl -n opensips wait pod -l "job-name=${JOB}" \
-              --for=condition=Ready --timeout=5m
-            kubectl -n opensips logs -f "job/${JOB}" -c kaniko &
-            LOG_PID=$!
+            docker build --progress=plain \
+              -f docker/Dockerfile \
+              --build-arg "OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>" \
+              --build-arg "EHWS_BUILD=<< pipeline.number >>" \
+              --build-arg "OPENSIPS_VERSION=${RELEASE_TAG}" \
+              -t "${IMAGE}:${IMAGE_TAG}" \
+              .
 
-            for attempt in $(seq 1 450); do
-              complete=$(kubectl -n opensips get job "${JOB}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')
-              failed=$(kubectl -n opensips get job "${JOB}" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}')
-              if [[ "${complete}" == "True" ]]; then
-                wait "${LOG_PID}" || true
-                echo "Pushed: registry.ehws.generic.business/ehws/opensips:${IMAGE_TAG}"
-                exit 0
-              fi
-              if [[ "${failed}" == "True" ]]; then
-                kubectl -n opensips logs "job/${JOB}" -c kaniko || true
-                kubectl -n opensips describe job "${JOB}"
-                exit 1
-              fi
-              (( attempt % 6 == 0 )) && echo "Build still running (${attempt}0s)..."
-              sleep 10
-            done
-            kubectl -n opensips logs "job/${JOB}" -c kaniko || true
-            echo "Timed out waiting for ${JOB}" >&2
-            exit 1
+            docker push "${IMAGE}:${IMAGE_TAG}"
+            echo "Pushed: ${IMAGE}:${IMAGE_TAG}"
 
   validate-image:
     executor: default
@@ -467,7 +429,7 @@ workflows:
             equal: [master, << pipeline.git.branch >>]
     jobs:
       - build-image:
-          context: ehws-authentik-oidc
+          context: ehws-1password-secrets
       - validate-image:
           context: ehws-authentik-oidc
           requires:
@@ -482,7 +444,7 @@ workflows:
         - equal: [master, << pipeline.git.branch >>]
     jobs:
       - build-image:
-          context: ehws-authentik-oidc
+          context: ehws-1password-secrets
       - validate-image:
           context: ehws-authentik-oidc
           requires:
