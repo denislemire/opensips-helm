@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM debian:bookworm-slim AS builder
+FROM debian:trixie-slim AS builder
 
 ARG OPENSIPS_GIT_REF=4.0
 ARG EHWS_BUILD=1
