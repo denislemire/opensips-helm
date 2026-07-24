@@ -11,9 +11,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN rm -rf /etc/apt/sources.list.d/* \
     && rm -f /var/lib/dpkg/statoverride /var/lib/dpkg/statoverride-old \
     && printf '%s\n' \
-      'deb http://deb.debian.org/debian bookworm main' \
-      'deb http://deb.debian.org/debian bookworm-updates main' \
-      'deb http://deb.debian.org/debian-security bookworm-security main' \
+      'deb http://deb.debian.org/debian trixie main' \
+      'deb http://deb.debian.org/debian trixie-updates main' \
+      'deb http://deb.debian.org/debian-security trixie-security main' \
       > /etc/apt/sources.list \
     && apt-get update && apt-get install -y \
       -o Dpkg::Options::=--force-confnew --no-install-recommends \
@@ -46,7 +46,7 @@ RUN MODULE_PATHS="$(for m in ${OPENSIPS_MODULES}; do printf 'modules/%s ' "$m"; 
     install \
     && strip --strip-unneeded /usr/sbin/opensips /usr/lib/opensips/modules/*.so
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ARG OPENSIPS_VERSION=0.1.0
 
@@ -61,9 +61,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN rm -rf /etc/apt/sources.list.d/* \
     && rm -f /var/lib/dpkg/statoverride /var/lib/dpkg/statoverride-old \
     && printf '%s\n' \
-      'deb http://deb.debian.org/debian bookworm main' \
-      'deb http://deb.debian.org/debian bookworm-updates main' \
-      'deb http://deb.debian.org/debian-security bookworm-security main' \
+      'deb http://deb.debian.org/debian trixie main' \
+      'deb http://deb.debian.org/debian trixie-updates main' \
+      'deb http://deb.debian.org/debian-security trixie-security main' \
       > /etc/apt/sources.list \
     && apt-get update && apt-get install -y \
       -o Dpkg::Options::=--force-confnew --no-install-recommends \
