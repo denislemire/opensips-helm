@@ -8,10 +8,10 @@ ARG OPENSIPS_VERSION=0.1.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt --update upgrade &&  apt install -y \
-    --no-install-recommends \
+# Trixie dropped libpcre3; OpenSIPS 4.0 builds against libpcre2.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates git build-essential bison flex pkg-config \
-    libssl-dev libncurses-dev libxml2-dev libpcre3-dev \
+    libssl-dev libncurses-dev libxml2-dev libpcre2-dev \
     libcurl4-openssl-dev libhiredis-dev libmariadb-dev libmariadb-dev-compat \
     default-libmysqlclient-dev libjson-c-dev \
     libevent-dev libxmlrpc-core-c3-dev libperl-dev libmemcached-dev \
@@ -51,11 +51,12 @@ LABEL org.opencontainers.image.licenses="GPL-2.0-or-later"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt update && apt install -y \
-    --no-install-recommends \
-    ca-certificates libssl3 libxml2 libpcre3 libcurl4 libhiredis0.14 \
-    libmariadb3 libjson-c5 libevent-2.1-7 libxmlrpc-core-c3 libmemcached11 \
-    libmicrohttpd12 libuuid1 mariadb-client-core \
+# Runtime SONAMEs on amd64 Trixie use the t64 ABI transition packages.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3t64 libxml2 libpcre2-8-0 libcurl4t64 libhiredis1.1.0 \
+    libmariadb3 libjson-c5 libevent-2.1-7t64 libxmlrpc-core-c3t64 libmemcached11t64 \
+    libmicrohttpd12t64 libuuid1 mariadb-client-core \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/sbin/opensips /usr/sbin/opensips
 COPY --from=builder /usr/lib/opensips /usr/lib/opensips
