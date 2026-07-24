@@ -8,15 +8,8 @@ ARG OPENSIPS_VERSION=0.1.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN rm -rf /etc/apt/sources.list.d/* \
-    && rm -f /var/lib/dpkg/statoverride /var/lib/dpkg/statoverride-old \
-    && printf '%s\n' \
-      'deb http://deb.debian.org/debian trixie main' \
-      'deb http://deb.debian.org/debian trixie-updates main' \
-      'deb http://deb.debian.org/debian-security trixie-security main' \
-      > /etc/apt/sources.list \
-    && apt-get update && apt-get install -y \
-      -o Dpkg::Options::=--force-confnew --no-install-recommends \
+RUN apt --update upgrade &&  apt install -y \
+    --no-install-recommends \
     ca-certificates git build-essential bison flex pkg-config \
     libssl-dev libncurses-dev libxml2-dev libpcre3-dev \
     libcurl4-openssl-dev libhiredis-dev libmariadb-dev libmariadb-dev-compat \
@@ -58,19 +51,11 @@ LABEL org.opencontainers.image.licenses="GPL-2.0-or-later"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN rm -rf /etc/apt/sources.list.d/* \
-    && rm -f /var/lib/dpkg/statoverride /var/lib/dpkg/statoverride-old \
-    && printf '%s\n' \
-      'deb http://deb.debian.org/debian trixie main' \
-      'deb http://deb.debian.org/debian trixie-updates main' \
-      'deb http://deb.debian.org/debian-security trixie-security main' \
-      > /etc/apt/sources.list \
-    && apt-get update && apt-get install -y \
-      -o Dpkg::Options::=--force-confnew --no-install-recommends \
+RUN apt update && apt install -y \
+    --no-install-recommends \
     ca-certificates libssl3 libxml2 libpcre3 libcurl4 libhiredis0.14 \
     libmariadb3 libjson-c5 libevent-2.1-7 libxmlrpc-core-c3 libmemcached11 \
     libmicrohttpd12 libuuid1 mariadb-client-core \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/sbin/opensips /usr/sbin/opensips
 COPY --from=builder /usr/lib/opensips /usr/lib/opensips
