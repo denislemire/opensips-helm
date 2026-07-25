@@ -6,7 +6,7 @@ version: '2.1'
 # master commits build, validate, publish, promote, and verify Flux deployment.
 #
 # ┌─ Image build (machine) ──────────────────────────────────────────────────────┐
-# │  debian-trixie (debian-13:current / trixie-large, 4 CPU / 16GiB):             │
+# │  debian-trixie (debian-13:current / trixie-large, 4 CPU / 8GiB):              │
 # │    1) unit-test compile (-DUNIT_TESTS) + TAP gate                           │
 # │    2) production docker build/push to Zot (ehws-1password-secrets)          │
 # │  Same job/OS so a failed unit build never starts the image build.           │
@@ -53,7 +53,7 @@ executors:
     resource_class: denislemire/ehws
 
   # KubeVirt Debian 13 (trixie) machine image — real Docker daemon on the VM.
-  # Bake: denislemire/circleci-debian; class display name "Trixie Large" (4 CPU / 16GiB).
+  # Bake: denislemire/circleci-debian; class display name "Trixie Large" (4 CPU / 8GiB).
   debian-trixie:
     machine:
       image: debian-13:current
