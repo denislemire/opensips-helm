@@ -6,12 +6,12 @@ version: '2.1'
 # master commits build, validate, publish, promote, and verify Flux deployment.
 #
 # ┌─ Image build (machine) ──────────────────────────────────────────────────────┐
-# │  debian-trixie (debian-13:current / trixie-medium):                          │
+# │  debian-trixie (debian-13:current / trixie-large, 4 CPU / 16GiB):             │
 # │    1) unit-test compile (-DUNIT_TESTS) + TAP gate                           │
 # │    2) production docker build/push to Zot (ehws-1password-secrets)          │
 # │  Same job/OS so a failed unit build never starts the image build.           │
 # │  OpenSIPS needs a separate -DUNIT_TESTS binary; that is two makes, not two  │
-# │  CircleCI jobs.                                                             │
+# │  CircleCI jobs. make -j"$(nproc)" on both the unit build and Dockerfile.    │
 # └──────────────────────────────────────────────────────────────────────────────┘
 #
 # ┌─ OIDC flow (cluster jobs) ───────────────────────────────────────────────────┐
@@ -54,7 +54,6 @@ executors:
 
   # KubeVirt Debian 13 (trixie) machine image — real Docker daemon on the VM.
   # Bake: denislemire/circleci-debian; class display name "Trixie Large" (4 CPU / 16GiB).
-  # Requires ehws-infra feat/circleci-trixie-large (PR #703) reconciled before jobs schedule.
   debian-trixie:
     machine:
       image: debian-13:current
