@@ -53,11 +53,12 @@ executors:
     resource_class: denislemire/ehws
 
   # KubeVirt Debian 13 (trixie) machine image — real Docker daemon on the VM.
-  # Bake: denislemire/circleci-debian; class display name "Trixie Medium".
+  # Bake: denislemire/circleci-debian; class display name "Trixie Large" (4 CPU / 24GiB).
+  # Requires ehws-infra feat/circleci-trixie-large (PR #703) reconciled before jobs schedule.
   debian-trixie:
     machine:
       image: debian-13:current
-    resource_class: trixie-medium
+    resource_class: trixie-large
 
 commands:
   oidc_kubeconfig:
@@ -152,7 +153,7 @@ jobs:
           no_output_timeout: 20m
           command: |
             set -euo pipefail
-            echo "nproc=$(nproc) — make -j uses all visible CPUs (trixie-medium = 2)"
+            echo "nproc=$(nproc) — make -j uses all visible CPUs (trixie-large = 4)"
             SRC=/tmp/opensips-unit
             rm -rf "${SRC}"
             mkdir -p "${SRC}"
