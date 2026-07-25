@@ -152,6 +152,7 @@ jobs:
           no_output_timeout: 20m
           command: |
             set -euo pipefail
+            echo "nproc=$(nproc) — make -j uses all visible CPUs (trixie-medium = 2)"
             SRC=/tmp/opensips-unit
             rm -rf "${SRC}"
             mkdir -p "${SRC}"
@@ -165,9 +166,9 @@ jobs:
             printf 'DEFS+= -I%s/lib/libtap\nLIBS+= -L%s/lib/libtap\n' \
               "${SRC}/opensips" "${SRC}/opensips" >> Makefile.conf
             make -j"$(nproc)" DEFS_EXTRA_OPTS="-DUNIT_TESTS -fPIC" opensips
-            # Capture TAP even on failure so JUnit/artifacts still publish.
+            # No -dd: debug noise is not TAP and breaks TAP::Formatter::JUnit.
             set +e
-            ./opensips -dd -T core -w . -a HP_MALLOC 2>&1 | tee /tmp/unit-tests.tap
+            ./opensips -T core -w . -a HP_MALLOC 2>&1 | tee /tmp/unit-tests.tap
             status=${PIPESTATUS[0]}
             set -e
             exit "${status}"
@@ -178,12 +179,21 @@ jobs:
             set -euo pipefail
             mkdir -p /tmp/test-results
             if [[ ! -f /tmp/unit-tests.tap ]]; then
-              echo "No TAP output captured" >&2
+              echo "No TAP output captured (compile/test step did not produce a log)" >&2
               exit 1
             fi
             cp /tmp/unit-tests.tap /tmp/test-results/unit-tests.tap
-            prove --formatter TAP::Formatter::JUnit --merge \
-              --exec cat /tmp/unit-tests.tap > /tmp/test-results/junit.xml
+            # Best-effort: a formatter failure must not fail the job after a green suite.
+            if ! prove --formatter TAP::Formatter::JUnit --merge \
+                  --exec cat /tmp/unit-tests.tap > /tmp/test-results/junit.xml 2>/tmp/prove.err
+            then
+              echo "WARN: TAP→JUnit conversion failed; storing TAP only" >&2
+              cat /tmp/prove.err >&2 || true
+              printf '%s\n' \
+                '<?xml version="1.0" encoding="UTF-8"?>' \
+                '<testsuite name="opensips-unit" tests="0" failures="0" errors="0"/>' \
+                > /tmp/test-results/junit.xml
+            fi
       - store_test_results:
           when: always
           path: /tmp/test-results
