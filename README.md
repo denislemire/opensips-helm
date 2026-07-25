@@ -65,9 +65,19 @@ docker build -f docker/Dockerfile \
   -t denislemire/opensips:0.1.0 .
 ```
 
-### C. CircleCI (planned)
+### C. CircleCI
 
-Path-filtered build + dual push (Docker Hub + Zot) — same pattern as `asterisk-docker`. Not wired yet.
+Path-filtered build dual-pushes to **Zot** (`registry.ehws.generic.business/ehws/opensips`) and **Docker Hub** (`denislemire/opensips`).
+
+The image embeds [rtp.io](https://opensips.org/docs/modules/4.0.x/rtp.io.html) (librtpproxy) alongside RTPEngine. Tags:
+
+| Registry | Candidate (feature branches) | Release (master promote) |
+| --- | --- | --- |
+| Zot + Hub | `4.0.0-ehws.<N>-candidate` | `4.0.0-ehws.<N>` |
+| Zot + Hub (rtp.io alias) | `4.0.0-ehws.<N>-rtpio-candidate` | `4.0.0-ehws.<N>-rtpio` |
+| Hub floating | — | `4.0.0-rtpio` |
+
+Docker Hub uses the CircleCI `dockerhub` context; Zot uses `ehws-1password-secrets`.
 
 ## Install
 

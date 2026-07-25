@@ -7,8 +7,8 @@ version: '2.1'
 #
 # ┌─ Image build (machine) ──────────────────────────────────────────────────────┐
 # │  debian-trixie (debian-13:current / trixie-medium) runs docker build/push.  │
-# │  Registry login uses onepassword/secrets + ehws-1password-secrets context.  │
-# │  Same pattern as apsystems-prometheus-exporter and filehash-offload.        │
+# │  Dual push: Zot (ehws-1password-secrets) + Docker Hub (dockerhub context). │
+# │  Image includes rtp.io (librtpproxy); tags carry a -rtpio suffix alias.     │
 # └──────────────────────────────────────────────────────────────────────────────┘
 #
 # ┌─ OIDC flow (cluster jobs) ───────────────────────────────────────────────────┐
@@ -31,6 +31,10 @@ version: '2.1'
 #
 # Context: ehws-1password-secrets
 #   OP_SERVICE_ACCOUNT_TOKEN — 1Password service account for Zot htpasswd refs
+#
+# Context: dockerhub
+#   DOCKERHUB_USER / DOCKERHUB_PASSWORD (or DOCKER_LOGIN / DOCKER_PASSWORD)
+#   Public image: denislemire/opensips
 
 orbs:
   onepassword: onepassword/secrets@1
@@ -146,30 +150,52 @@ jobs:
             op --version
             echo 'export PATH="/usr/local/bin:$PATH"' >> "$BASH_ENV"
       - run:
-          name: Build and push candidate image to Zot
+          name: Build and dual-push candidate image (Zot + Docker Hub)
           no_output_timeout: 75m
           shell: op run -- /bin/bash
           command: |
             set -euo pipefail
 
             REGISTRY="registry.ehws.generic.business"
-            IMAGE="${REGISTRY}/ehws/opensips"
+            ZOT_IMAGE="${REGISTRY}/ehws/opensips"
+            HUB_IMAGE="denislemire/opensips"
             RELEASE_TAG="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
             IMAGE_TAG="${RELEASE_TAG}-candidate"
+            # Alias tags advertise embedded rtp.io / librtpproxy support.
+            RTPIO_TAG="${RELEASE_TAG}-rtpio-candidate"
+
+            HUB_USER="${DOCKERHUB_USER:-${DOCKER_LOGIN:-}}"
+            HUB_PASS="${DOCKERHUB_PASSWORD:-${DOCKER_PASSWORD:-}}"
+            if [[ -z "${HUB_USER}" || -z "${HUB_PASS}" ]]; then
+              echo "Missing Docker Hub credentials (dockerhub context)" >&2
+              exit 1
+            fi
 
             printf '%s' "${ZOT_PASSWORD}" \
               | docker login "${REGISTRY}" -u "${ZOT_USERNAME}" --password-stdin
+            printf '%s' "${HUB_PASS}" \
+              | docker login -u "${HUB_USER}" --password-stdin
 
             docker build --progress=plain \
               -f docker/Dockerfile \
               --build-arg "OPENSIPS_GIT_REF=<< pipeline.parameters.opensips_version >>" \
               --build-arg "EHWS_BUILD=<< pipeline.number >>" \
               --build-arg "OPENSIPS_VERSION=${RELEASE_TAG}" \
-              -t "${IMAGE}:${IMAGE_TAG}" \
+              -t "${ZOT_IMAGE}:${IMAGE_TAG}" \
+              -t "${ZOT_IMAGE}:${RTPIO_TAG}" \
+              -t "${HUB_IMAGE}:${IMAGE_TAG}" \
+              -t "${HUB_IMAGE}:${RTPIO_TAG}" \
               .
 
-            docker push "${IMAGE}:${IMAGE_TAG}"
-            echo "Pushed: ${IMAGE}:${IMAGE_TAG}"
+            for ref in \
+              "${ZOT_IMAGE}:${IMAGE_TAG}" \
+              "${ZOT_IMAGE}:${RTPIO_TAG}" \
+              "${HUB_IMAGE}:${IMAGE_TAG}" \
+              "${HUB_IMAGE}:${RTPIO_TAG}"
+            do
+              docker push "${ref}"
+              echo "Pushed: ${ref}"
+            done
 
   validate-image:
     executor: default
@@ -209,11 +235,13 @@ jobs:
       - install_kubectl
       - oidc_kubeconfig
       - run:
-          name: Promote validated digest to the Flux-visible tag
+          name: Promote validated digest to the Flux-visible tag (Zot)
           command: |
             set -euo pipefail
             CANDIDATE="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>-candidate"
             RELEASE="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
+            RTPIO_CANDIDATE="${RELEASE}-rtpio-candidate"
+            RTPIO_RELEASE="${RELEASE}-rtpio"
             JOB="opensips-promote-<< pipeline.number >>"
             trap 'kubectl -n opensips delete job "${JOB}" --ignore-not-found --wait=false >/dev/null 2>&1 || true' EXIT
 
@@ -246,11 +274,16 @@ jobs:
                   containers:
                     - name: crane
                       image: gcr.io/go-containerregistry/crane:debug
+                      command: ["/busybox/sh", "-c"]
                       args:
-                        - copy
-                        - --insecure
-                        - zot.registry.svc.cluster.local:5000/ehws/opensips:${CANDIDATE}
-                        - zot.registry.svc.cluster.local:5000/ehws/opensips:${RELEASE}
+                        - |
+                          set -eu
+                          crane copy --insecure \
+                            zot.registry.svc.cluster.local:5000/ehws/opensips:${CANDIDATE} \
+                            zot.registry.svc.cluster.local:5000/ehws/opensips:${RELEASE}
+                          crane copy --insecure \
+                            zot.registry.svc.cluster.local:5000/ehws/opensips:${RTPIO_CANDIDATE} \
+                            zot.registry.svc.cluster.local:5000/ehws/opensips:${RTPIO_RELEASE}
                       env:
                         - {name: DOCKER_CONFIG, value: /config}
                       volumeMounts:
@@ -263,6 +296,39 @@ jobs:
             kubectl -n opensips wait "job/${JOB}" --for=condition=Complete --timeout=5m
             kubectl -n opensips logs "job/${JOB}" -c crane
             echo "Promoted: registry.ehws.generic.business/ehws/opensips:${RELEASE}"
+            echo "Promoted: registry.ehws.generic.business/ehws/opensips:${RTPIO_RELEASE}"
+      - run:
+          name: Promote validated digest on Docker Hub
+          command: |
+            set -euo pipefail
+            CANDIDATE="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>-candidate"
+            RELEASE="<< pipeline.parameters.opensips_version >>-ehws.<< pipeline.number >>"
+            RTPIO_CANDIDATE="${RELEASE}-rtpio-candidate"
+            RTPIO_RELEASE="${RELEASE}-rtpio"
+            HUB_IMAGE="denislemire/opensips"
+
+            HUB_USER="${DOCKERHUB_USER:-${DOCKER_LOGIN:-}}"
+            HUB_PASS="${DOCKERHUB_PASSWORD:-${DOCKER_PASSWORD:-}}"
+            if [[ -z "${HUB_USER}" || -z "${HUB_PASS}" ]]; then
+              echo "Missing Docker Hub credentials (dockerhub context)" >&2
+              exit 1
+            fi
+
+            curl -fsSL -o /tmp/crane.tar.gz \
+              "https://github.com/google/go-containerregistry/releases/download/v0.20.6/go-containerregistry_Linux_x86_64.tar.gz"
+            tar -xzf /tmp/crane.tar.gz -C /tmp crane
+            sudo mv /tmp/crane /usr/local/bin/crane
+            chmod +x /usr/local/bin/crane
+
+            printf '%s' "${HUB_PASS}" | crane auth login index.docker.io -u "${HUB_USER}" --password-stdin
+            crane copy "${HUB_IMAGE}:${CANDIDATE}" "${HUB_IMAGE}:${RELEASE}"
+            crane copy "${HUB_IMAGE}:${RTPIO_CANDIDATE}" "${HUB_IMAGE}:${RTPIO_RELEASE}"
+            # Discoverable floating tag for the rtp.io-capable public image.
+            crane copy "${HUB_IMAGE}:${RTPIO_RELEASE}" \
+              "${HUB_IMAGE}:<< pipeline.parameters.opensips_version >>-rtpio"
+            echo "Promoted: ${HUB_IMAGE}:${RELEASE}"
+            echo "Promoted: ${HUB_IMAGE}:${RTPIO_RELEASE}"
+            echo "Promoted: ${HUB_IMAGE}:<< pipeline.parameters.opensips_version >>-rtpio"
 
   verify-deployment:
     executor: default
@@ -429,7 +495,9 @@ workflows:
             equal: [master, << pipeline.git.branch >>]
     jobs:
       - build-image:
-          context: ehws-1password-secrets
+          context:
+            - ehws-1password-secrets
+            - dockerhub
       - validate-image:
           context: ehws-authentik-oidc
           requires:
@@ -444,7 +512,9 @@ workflows:
         - equal: [master, << pipeline.git.branch >>]
     jobs:
       - build-image:
-          context: ehws-1password-secrets
+          context:
+            - ehws-1password-secrets
+            - dockerhub
       - validate-image:
           context: ehws-authentik-oidc
           requires:
@@ -454,7 +524,9 @@ workflows:
           requires:
             - validate-image
       - promote-image:
-          context: ehws-authentik-oidc
+          context:
+            - ehws-authentik-oidc
+            - dockerhub
           requires:
             - validate-image
       - verify-deployment:
