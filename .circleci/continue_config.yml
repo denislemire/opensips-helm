@@ -6,7 +6,7 @@ version: '2.1'
 # master commits build, validate, publish, promote, and verify Flux deployment.
 #
 # ┌─ Image build (machine) ──────────────────────────────────────────────────────┐
-# │  debian-trixie (debian-13:current / trixie-large, 4 CPU / 8GiB):              │
+# │  debian-trixie (debian-13:current / trixie-medium, 2 CPU / 8GiB):             │
 # │    1) unit-test compile (-DUNIT_TESTS) + TAP gate                           │
 # │    2) production docker build/push to Zot (ehws-1password-secrets)          │
 # │  Same job/OS so a failed unit build never starts the image build.           │
@@ -53,11 +53,11 @@ executors:
     resource_class: denislemire/ehws
 
   # KubeVirt Debian 13 (trixie) machine image — real Docker daemon on the VM.
-  # Bake: denislemire/circleci-debian; class display name "Trixie Large" (4 CPU / 8GiB).
+  # Bake: denislemire/circleci-debian; class display name "Trixie Medium" (2 CPU / 8GiB).
   debian-trixie:
     machine:
       image: debian-13:current
-    resource_class: trixie-large
+    resource_class: trixie-medium
 
 commands:
   oidc_kubeconfig:
@@ -152,7 +152,7 @@ jobs:
           no_output_timeout: 20m
           command: |
             set -euo pipefail
-            echo "nproc=$(nproc) — make -j uses all visible CPUs (trixie-large = 4)"
+            echo "nproc=$(nproc) — make -j uses all visible CPUs (trixie-medium = 2)"
             SRC=/tmp/opensips-unit
             rm -rf "${SRC}"
             mkdir -p "${SRC}"
@@ -166,9 +166,8 @@ jobs:
             printf 'DEFS+= -I%s/lib/libtap\nLIBS+= -L%s/lib/libtap\n' \
               "${SRC}/opensips" "${SRC}/opensips" >> Makefile.conf
             make -j"$(nproc)" DEFS_EXTRA_OPTS="-DUNIT_TESTS -fPIC" opensips
-            # No -dd: debug noise is not TAP and breaks TAP::Formatter::JUnit.
             set +e
-            ./opensips -T core -w . -a HP_MALLOC 2>&1 | tee /tmp/unit-tests.tap
+            ./opensips -dd -T core -w . -a HP_MALLOC 2>&1 | tee /tmp/unit-tests.tap
             status=${PIPESTATUS[0]}
             set -e
             exit "${status}"
@@ -179,21 +178,12 @@ jobs:
             set -euo pipefail
             mkdir -p /tmp/test-results
             if [[ ! -f /tmp/unit-tests.tap ]]; then
-              echo "No TAP output captured (compile/test step did not produce a log)" >&2
+              echo "No TAP output captured" >&2
               exit 1
             fi
             cp /tmp/unit-tests.tap /tmp/test-results/unit-tests.tap
-            # Best-effort: a formatter failure must not fail the job after a green suite.
-            if ! prove --formatter TAP::Formatter::JUnit --merge \
-                  --exec cat /tmp/unit-tests.tap > /tmp/test-results/junit.xml 2>/tmp/prove.err
-            then
-              echo "WARN: TAP→JUnit conversion failed; storing TAP only" >&2
-              cat /tmp/prove.err >&2 || true
-              printf '%s\n' \
-                '<?xml version="1.0" encoding="UTF-8"?>' \
-                '<testsuite name="opensips-unit" tests="0" failures="0" errors="0"/>' \
-                > /tmp/test-results/junit.xml
-            fi
+            prove --formatter TAP::Formatter::JUnit --merge \
+              --exec cat /tmp/unit-tests.tap > /tmp/test-results/junit.xml
       - store_test_results:
           when: always
           path: /tmp/test-results
