@@ -12,6 +12,15 @@ setup: true
 orbs:
   path-filtering: circleci/path-filtering@2
 
+# Must match continue_config.yml — Server continuation rejects undeclared params.
+parameters:
+  run_image_pipeline:
+    type: boolean
+    default: false
+  opensips_version:
+    type: string
+    default: "4.0.1"
+
 workflows:
   detect-opensips-changes:
     jobs:
