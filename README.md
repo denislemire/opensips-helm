@@ -8,7 +8,7 @@ Generic by design — no site-specific IPs, carriers, or cluster names in chart 
 
 ## Features
 
-- **OpenSIPS 4.0** built from upstream git (`4.0` branch)
+- **OpenSIPS 4.0** built from upstream git tag `4.0.1`
 - **RTPEngine** — `distributed` (default, StatefulSet) or `sidecar` (debug)
 - **4× RTPEngine** default with **pod anti-affinity** (one pod per node)
 - **DNS discovery** of RTPEngine control sockets at OpenSIPS startup

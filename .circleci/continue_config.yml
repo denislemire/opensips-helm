@@ -41,7 +41,7 @@ orbs:
 parameters:
   opensips_version:
     type: string
-    default: "4.0.0"
+    default: "4.0.1"
   run_image_pipeline:
     type: boolean
     default: false
