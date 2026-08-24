@@ -165,6 +165,17 @@ serviceMonitor:
   interval: 30s
   labels: {}
 
+# HEPv3 export via proto_hep + tracer (OpenSIPS 4.0). Off by default.
+# Point host at a collector in the same namespace, e.g. siptrace:9060.
+tracing:
+  enabled: false
+  hep:
+    host: ""
+    port: 9060
+    transport: tcp
+    version: 3
+    captureId: 2001
+
 prometheus:
   enabled: false
   port: 8888
