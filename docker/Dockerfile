@@ -23,7 +23,7 @@ RUN git clone --depth 1 --branch "${OPENSIPS_GIT_REF}" \
     https://github.com/OpenSIPS/opensips.git opensips
 
 WORKDIR /src/opensips
-ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar permissions"
+ARG OPENSIPS_MODULES="signaling proto_udp proto_tcp proto_tls tls_mgm tls_openssl proto_hep tracer httpd prometheus sl tm rr maxfwd sipmsgops textops dialog rtpengine uac uac_auth db_mysql usrloc uac_registrant registrar permissions"
 
 # include_modules= is additive to OpenSIPS's full default module set, not a
 # restriction (see upstream INSTALL: "compile all default modules and include

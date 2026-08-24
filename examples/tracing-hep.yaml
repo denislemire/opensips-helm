@@ -1,0 +1,11 @@
+# Generic HEPv3 export. Install the collector in the same namespace
+# (service name siptrace in this example) so HEP stays ClusterIP.
+
+tracing:
+  enabled: true
+  hep:
+    host: siptrace
+    port: 9060
+    transport: tcp
+    version: 3
+    captureId: 2001

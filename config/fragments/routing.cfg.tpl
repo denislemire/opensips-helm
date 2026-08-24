@@ -6,6 +6,14 @@ route {
         exit;
     }
 
+    {{- if .Values.tracing.enabled }}
+    if (is_method("INVITE") && !has_totag()) {
+        trace("hep", "d", "sip");
+    } else if (is_method("REGISTER") && !has_totag()) {
+        trace("hep", "t", "sip");
+    }
+    {{- end }}
+
     if (is_method("OPTIONS")) {
         sl_send_reply(200, "OK");
         exit;

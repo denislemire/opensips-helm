@@ -91,6 +91,7 @@ helm install opensips . -n opensips --create-namespace \
 | `rtpengine.affinity` | anti-affinity | One RTPEngine pod per node |
 | `peers.asterisk.enabled` | `false` | Enable for static trunk to PBX |
 | `registration.enabled` | `false` | Enable at cutover only |
+| `tracing.enabled` | `false` | HEPv3 via `proto_hep` + `tracer`; set `tracing.hep.host` |
 
 ## Config layout
 
@@ -98,6 +99,7 @@ helm install opensips . -n opensips --create-namespace \
 config/fragments/
   opensips.cfg.tpl    # main — imports opensips.d/*
   modules.cfg.tpl
+  tracer.cfg.tpl     # when tracing.enabled
   rtpengine.cfg.tpl
   routing.cfg.tpl
   peers-asterisk.cfg.tpl
