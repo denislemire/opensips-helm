@@ -41,7 +41,7 @@ orbs:
 parameters:
   opensips_version:
     type: string
-    default: "4.0.1"
+    default: "4.0.2"
   run_image_pipeline:
     type: boolean
     default: false
@@ -265,9 +265,15 @@ jobs:
               | kubectl -n opensips apply -f -
 
             trap 'kubectl -n opensips delete job "${JOB}" configmap "${RELEASE}" --ignore-not-found --wait=false' EXIT
-            kubectl -n opensips wait pod -l "job-name=${JOB}" --for=condition=Ready --timeout=5m
-            kubectl -n opensips logs -f "job/${JOB}"
-            kubectl -n opensips wait "job/${JOB}" --for=condition=Complete --timeout=5m
+            # The check exits in well under a second. Waiting for Ready loses
+            # that window once the pod is already Succeeded, and then the step
+            # dies before the logs are printed.
+            set +e
+            kubectl -n opensips wait "job/${JOB}" --for=condition=complete --timeout=5m
+            wait_rc=$?
+            kubectl -n opensips logs "job/${JOB}"
+            set -e
+            exit "${wait_rc}"
 
   promote-image:
     executor: default

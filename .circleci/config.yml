@@ -19,7 +19,7 @@ parameters:
     default: false
   opensips_version:
     type: string
-    default: "4.0.1"
+    default: "4.0.2"
 
 workflows:
   detect-opensips-changes:
